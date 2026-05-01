@@ -12,5 +12,5 @@
     "type": "module"
   },
   "permissions": ["contextMenus", "storage"],
-  "host_permissions": ["http://localhost:5178/*", "http://127.0.0.1:5178/*"]
+  "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"]
 }

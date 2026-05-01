@@ -16,6 +16,17 @@
     </header>
 
     <main class="shell">
+      <details class="settings-card" id="backendSettings">
+        <summary>连接设置</summary>
+        <div class="backend-row">
+          <label>
+            <span>本地后端</span>
+            <input id="backendBaseInput" type="url" placeholder="http://localhost:5178" />
+          </label>
+          <button id="saveBackendButton" type="button" class="link-button">保存</button>
+        </div>
+      </details>
+
       <section class="query">
         <label>
           <span>声优名或马甲</span>
@@ -40,10 +51,30 @@
           <span>页数</span>
           <input id="pagesInput" type="number" min="1" max="3" value="1" />
         </label>
+        <label>
+          <span>每页</span>
+          <select id="perPageInput">
+            <option value="30" selected>30</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </label>
+        <label class="check muted-check">
+          <input id="verifyDetailsInput" type="checkbox" />
+          <span>详情验证</span>
+        </label>
         <label class="check">
           <input id="adultConfirmInput" type="checkbox" />
           <span>确认合法年龄与地区</span>
         </label>
+      </section>
+
+      <section class="panel compact-panel" id="historyPanel" hidden>
+        <div class="panel-head">
+          <h2>最近搜索</h2>
+          <button id="clearHistoryButton" type="button" class="link-button">清空</button>
+        </div>
+        <div class="history-list" id="historyList"></div>
       </section>
 
       <section class="panel">
@@ -59,6 +90,11 @@
           <h2>别名</h2>
           <span id="aliasCount">0</span>
         </div>
+        <div class="alias-tools">
+          <button id="selectPenNamesButton" type="button" class="link-button">马甲</button>
+          <button id="selectAllAliasesButton" type="button" class="link-button">全选</button>
+          <button id="clearAliasesButton" type="button" class="link-button">清空</button>
+        </div>
         <div class="alias-list" id="aliasList"></div>
       </section>
 
@@ -68,6 +104,8 @@
           <button id="openFullAppButton" type="button" class="link-button">打开本地页面</button>
         </div>
         <p id="summary" class="summary">先解析人物，再搜索作品。</p>
+        <div class="tabs" id="typeTabs"></div>
+        <div class="tabs age-tabs" id="ageTabs"></div>
         <div class="result-list" id="resultList"></div>
       </section>
     </main>

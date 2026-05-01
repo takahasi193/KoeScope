@@ -5,10 +5,12 @@ function normalizeKeyword(value) {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create({
-    id: MENU_ID,
-    title: '用 DL Voice Search 搜索 "%s"',
-    contexts: ["selection"],
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: MENU_ID,
+      title: '用 DL Voice Search 搜索 "%s"',
+      contexts: ["selection"],
+    });
   });
 });
 

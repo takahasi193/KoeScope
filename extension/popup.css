@@ -21,8 +21,8 @@
 }
 
 body {
-  width: 390px;
-  min-height: 560px;
+  width: 410px;
+  min-height: 600px;
   margin: 0;
   background: var(--surface);
   color: var(--ink);
@@ -111,12 +111,34 @@ h2 {
   padding: 12px;
 }
 
+.settings-card,
 .query,
 .settings,
 .panel {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
+}
+
+.settings-card {
+  overflow: hidden;
+}
+
+.settings-card summary {
+  min-height: 38px;
+  padding: 10px 12px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 850;
+  list-style-position: inside;
+}
+
+.backend-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px;
+  gap: 8px;
+  padding: 0 12px 12px;
 }
 
 .query {
@@ -194,9 +216,16 @@ select:focus {
   font-size: 12px;
 }
 
+.link-button:hover,
+.history-item:hover {
+  border-color: rgba(8, 117, 111, 0.32);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .settings {
   display: grid;
-  grid-template-columns: 1fr 72px;
+  grid-template-columns: 1fr 72px 72px;
   gap: 10px;
   padding: 12px;
 }
@@ -212,6 +241,12 @@ select:focus {
   padding: 0 10px;
   background: var(--warning-soft);
   color: var(--warning);
+}
+
+.muted-check {
+  grid-column: auto;
+  background: #fff;
+  color: var(--muted);
 }
 
 .check input {
@@ -234,10 +269,36 @@ select:focus {
   font-weight: 850;
 }
 
+.compact-panel .panel-head {
+  padding: 9px 12px;
+}
+
 .candidate-list,
 .alias-list,
-.result-list {
+.result-list,
+.history-list {
   display: grid;
+}
+
+.history-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.history-item {
+  min-width: 0;
+  min-height: 32px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .candidate {
@@ -281,7 +342,13 @@ select:focus {
 .alias-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  padding: 10px 12px;
+  padding: 8px 12px 10px;
+}
+
+.alias-tools {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px 0;
 }
 
 .alias-chip {
@@ -317,6 +384,37 @@ select:focus {
   margin: 0;
   padding: 10px 12px;
   border-bottom: 1px solid var(--line);
+}
+
+.tabs {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.age-tabs {
+  padding-top: 0;
+  background: rgba(237, 242, 240, 0.45);
+}
+
+.tab {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.tab.active {
+  border-color: rgba(8, 117, 111, 0.34);
+  background: var(--accent);
+  color: #fff;
 }
 
 .result {
@@ -367,6 +465,16 @@ select:focus {
   color: #257345;
 }
 
+.tag.verify-matched {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.tag.verify-not_matched {
+  background: #fff1ef;
+  color: var(--danger);
+}
+
 .empty {
   padding: 16px 12px;
 }
@@ -381,4 +489,22 @@ select:focus {
   color: #fff;
   padding: 10px 12px;
   font-size: 12px;
+}
+
+.busy {
+  cursor: wait;
+}
+
+@media (max-width: 430px) {
+  body {
+    width: 100vw;
+  }
+
+  .settings {
+    grid-template-columns: 1fr 72px;
+  }
+
+  .muted-check {
+    grid-column: 1 / -1;
+  }
 }
