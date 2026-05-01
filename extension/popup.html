@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DL Voice Search</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Local backend</p>
+        <h1>DL Voice Search</h1>
+      </div>
+      <span class="status" id="serverStatus">连接中</span>
+    </header>
+
+    <main class="shell">
+      <section class="query">
+        <label>
+          <span>声优名或马甲</span>
+          <input id="keywordInput" type="search" placeholder="选中文本后右键搜索" autocomplete="off" />
+        </label>
+        <div class="actions">
+          <button id="resolveButton" class="primary" type="button">解析</button>
+          <button id="searchButton" class="secondary" type="button" disabled>搜索</button>
+        </div>
+      </section>
+
+      <section class="settings">
+        <label>
+          <span>范围</span>
+          <select id="scopeInput">
+            <option value="all" selected>全部</option>
+            <option value="adult">仅 R18</option>
+            <option value="nonAdult">全年龄/R15</option>
+          </select>
+        </label>
+        <label>
+          <span>页数</span>
+          <input id="pagesInput" type="number" min="1" max="3" value="1" />
+        </label>
+        <label class="check">
+          <input id="adultConfirmInput" type="checkbox" />
+          <span>确认合法年龄与地区</span>
+        </label>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>候选人物</h2>
+          <span id="candidateCount">0</span>
+        </div>
+        <div class="candidate-list" id="candidateList"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>别名</h2>
+          <span id="aliasCount">0</span>
+        </div>
+        <div class="alias-list" id="aliasList"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>结果</h2>
+          <button id="openFullAppButton" type="button" class="link-button">打开本地页面</button>
+        </div>
+        <p id="summary" class="summary">先解析人物，再搜索作品。</p>
+        <div class="result-list" id="resultList"></div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" hidden></div>
+    <script src="popup.js" type="module"></script>
+  </body>
+</html>

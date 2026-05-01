@@ -482,6 +482,16 @@ async function checkHealth() {
   }
 }
 
+function readInitialKeyword() {
+  const params = new URLSearchParams(window.location.search);
+  const keyword = params.get("q")?.trim();
+  if (!keyword) return false;
+
+  els.keywordInput.value = keyword;
+  state.keyword = keyword;
+  return true;
+}
+
 els.resolveButton.addEventListener("click", resolvePersons);
 els.runButton.addEventListener("click", runDlsiteSearch);
 els.keywordInput.addEventListener("keydown", (event) => {
@@ -494,7 +504,10 @@ els.clearAliasesButton.addEventListener("click", () => setAliasSelection("none")
 els.exportJsonButton.addEventListener("click", exportJson);
 els.exportCsvButton.addEventListener("click", exportCsv);
 
+const hasInitialKeyword = readInitialKeyword();
 renderCandidates();
 renderAliases();
 renderResults();
-checkHealth();
+checkHealth().then(() => {
+  if (hasInitialKeyword) resolvePersons();
+});

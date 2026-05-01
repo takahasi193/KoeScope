@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "DL Voice Search Companion",
+  "version": "0.1.0",
+  "description": "Browser entry point for the local DL Voice Search backend.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "DL Voice Search"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": ["contextMenus", "storage"],
+  "host_permissions": ["http://localhost:5178/*", "http://127.0.0.1:5178/*"]
+}

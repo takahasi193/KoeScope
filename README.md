@@ -38,3 +38,18 @@ npm start
 - 插件只负责浏览器入口、右键搜索和结果展示。
 - 本地后端复用当前 `src/lib` 里的 Bangumi/DLsite 逻辑。
 - 插件通过 `http://localhost:5178/api/search` 调用本地服务。
+
+项目提供 Chrome 插件雏形，位于 `extension/`：
+
+1. 先运行本地后端：
+
+```bash
+npm install
+npm start
+```
+
+2. 打开 Chrome 的 `chrome://extensions`，开启“开发者模式”。
+3. 选择“加载已解压的扩展程序”，加载项目里的 `extension/` 目录。
+4. 点击插件图标，或在网页中选中文本后右键选择“用 DL Voice Search 搜索”。
+
+插件只请求本机 `http://localhost:5178` 或 `http://127.0.0.1:5178`，不会直接访问 Bangumi 或 DLsite。
