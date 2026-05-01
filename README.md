@@ -31,7 +31,7 @@ npm start
 - 如果对外发布，请先核对 Bangumi 与 DLsite 的 API/站点条款，并设置 `APP_USER_AGENT` 为可联系的应用标识。
 - 公开仓库只包含本地检索工具代码，不托管成人素材、作品内容、下载资源，也不提供绕过访问限制或年龄确认的功能。
 
-## Chrome 插件路线
+## Chrome 插件
 
 纯 Chrome 插件可以做 UI，但跨站请求、User-Agent、限速缓存和站点条款处理都会更麻烦。推荐后续做成“插件 + 本地后端”：
 
@@ -39,7 +39,7 @@ npm start
 - 本地后端复用当前 `src/lib` 里的 Bangumi/DLsite 逻辑。
 - 插件通过 `http://localhost:5178/api/search` 调用本地服务。
 
-项目提供 Chrome 插件雏形，位于 `extension/`：
+项目已提供 Chrome Manifest V3 插件，位于 `extension/`：
 
 1. 先运行本地后端：
 
@@ -62,3 +62,9 @@ npm start
 - 设置年龄范围、页数、每页数量和详情验证。
 - 按作品形式与年龄分级筛选弹窗结果。
 - 将当前搜索词带入完整本地页面。
+
+## 后续可选改进
+
+- 增加插件 options 页面，把后端地址和默认搜索参数移出弹窗。
+- 为插件弹窗补充自动化 UI 回归测试。
+- 打包 `extension/` 为可分发 ZIP，并补充版本发布流程。
