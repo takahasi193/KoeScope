@@ -1,0 +1,18 @@
+{
+  "name": "dl-voice-search",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local Bangumi alias lookup and DLsite R18 work search helper.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "cheerio": "^1.1.2",
+    "express": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

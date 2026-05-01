@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DL Voice Search</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Bangumi alias lookup -> DLsite age-aware search</p>
+        <h1>DL Voice Search</h1>
+      </div>
+      <div class="status-pill" id="serverStatus">连接中</div>
+    </header>
+
+    <main class="shell">
+      <section class="workspace">
+        <div class="search-row">
+          <label class="search-field">
+            <span>声优名或马甲</span>
+            <input id="keywordInput" type="search" placeholder="例如：青山ゆかり" autocomplete="off" />
+          </label>
+          <button class="primary-action" id="resolveButton" type="button">解析人物</button>
+          <button class="secondary-action" id="runButton" type="button" disabled>搜索 DLsite</button>
+        </div>
+
+        <div class="settings-row">
+          <label>
+            <span>默认勾选数</span>
+            <input id="maxAliasesInput" type="number" min="1" max="80" value="12" />
+          </label>
+          <label>
+            <span>每个别名页数</span>
+            <input id="maxPagesInput" type="number" min="1" max="10" value="1" />
+          </label>
+          <label>
+            <span>每页数量</span>
+            <select id="perPageInput">
+              <option value="30" selected>30</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </label>
+          <label>
+            <span>年龄范围</span>
+            <select id="ageScopeInput">
+              <option value="all" selected>全部</option>
+              <option value="adult">仅 R18</option>
+              <option value="nonAdult">全年龄/R15</option>
+            </select>
+          </label>
+          <label class="check-control verify-check">
+            <input id="verifyDetailsInput" type="checkbox" />
+            <span>详情验证</span>
+          </label>
+          <label class="legal-check">
+            <input id="adultConfirm" type="checkbox" />
+            <span>我确认仅在合法年龄与地区使用 R18 搜索</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="layout">
+        <aside class="side-panel">
+          <div class="panel-head">
+            <h2>候选人物</h2>
+            <span id="candidateCount">0</span>
+          </div>
+          <div class="candidate-list" id="candidateList"></div>
+        </aside>
+
+        <section class="main-panel">
+          <div class="panel-head">
+            <h2>别名</h2>
+            <span id="aliasCount">0</span>
+          </div>
+          <div class="alias-tools">
+            <button class="mini-action" id="selectPenNamesButton" type="button">优先马甲</button>
+            <button class="mini-action" id="selectAllAliasesButton" type="button">全选</button>
+            <button class="mini-action" id="clearAliasesButton" type="button">清空</button>
+          </div>
+          <div class="alias-grid" id="aliasGrid"></div>
+
+          <div class="result-head">
+            <div>
+              <h2>结果</h2>
+              <p id="resultSummary">先解析人物，再选择别名搜索。</p>
+            </div>
+            <div class="result-actions">
+              <button class="mini-action" id="exportJsonButton" type="button" disabled>JSON</button>
+              <button class="mini-action" id="exportCsvButton" type="button" disabled>CSV</button>
+            </div>
+          </div>
+
+          <div class="tabs" id="categoryTabs"></div>
+          <div class="tabs age-tabs" id="ageTabs"></div>
+          <div class="result-list" id="resultList"></div>
+        </section>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" hidden></div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
