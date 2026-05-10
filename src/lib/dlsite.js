@@ -4,6 +4,31 @@ import { politeFetch } from "./fetcher.js";
 
 const DLSITE_BASE = "https://www.dlsite.com";
 const cache = new TTLCache(1000 * 60 * 60 * 6);
+const searchPageRequests = new Map();
+export const DEFAULT_MAX_PAGES_PER_ALIAS = 50;
+export const MAX_PAGES_PER_ALIAS = 100;
+export const DEFAULT_SEARCH_ORDER = "release_d";
+
+export const SEARCH_ORDERS = {
+  release_d: {
+    key: "release_d",
+    label: "最新",
+  },
+  dl_d: {
+    key: "dl_d",
+    label: "贩卖总数",
+  },
+};
+
+const SEARCH_ORDER_ALIASES = {
+  latest: "release_d",
+  newest: "release_d",
+  release: "release_d",
+  release_d: "release_d",
+  sales: "dl_d",
+  popularity: "dl_d",
+  dl_d: "dl_d",
+};
 
 const GAME_TYPES = new Set([
   "ADV",
@@ -66,8 +91,77 @@ function searchFloors(scope = "all") {
   ];
 }
 
-function buildSearchUrl(floor, keyword, page, perPage) {
-  return `${floor.base}/${encodeURIComponent(keyword)}/order/release/per_page/${perPage}/page/${page}`;
+export function normalizeSearchOrder(value) {
+  const key = SEARCH_ORDER_ALIASES[String(value ?? "").trim().toLowerCase()] ?? DEFAULT_SEARCH_ORDER;
+  return SEARCH_ORDERS[key] ? key : DEFAULT_SEARCH_ORDER;
+}
+
+export function searchOrderLabel(order) {
+  return SEARCH_ORDERS[normalizeSearchOrder(order)].label;
+}
+
+function buildSearchUrl(floor, keyword, page, perPage, order = DEFAULT_SEARCH_ORDER) {
+  const encodedKeyword = normalizeSpace(keyword).split(/\s+/u).map(encodeURIComponent).join("+");
+  return `${floor.base}/${encodedKeyword}/order/${normalizeSearchOrder(order)}/per_page/${perPage}/page/${page}`;
+}
+
+function searchCacheKey(floor, alias, order, page, perPage) {
+  return `dlsite:${floor.key}:${alias}:${normalizeSearchOrder(order)}:${page}:${perPage}`;
+}
+
+async function readSearchPage(floor, alias, page, perPage, order, options = {}) {
+  const cacheKey = searchCacheKey(floor, alias, order, page, perPage);
+  const cached = cache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const existingRequest = searchPageRequests.get(cacheKey);
+  if (existingRequest) return existingRequest;
+
+  const request = (async () => {
+    const url = buildSearchUrl(floor, alias, page, perPage, order);
+    const response = await politeFetch(url, {
+      minDelayMs: Number(options.minDelayMs) || 900,
+    });
+    const html = await response.text();
+    cache.set(cacheKey, html);
+    return html;
+  })();
+
+  searchPageRequests.set(cacheKey, request);
+  try {
+    return await request;
+  } finally {
+    if (searchPageRequests.get(cacheKey) === request) searchPageRequests.delete(cacheKey);
+  }
+}
+
+function clampPageLimit(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return DEFAULT_MAX_PAGES_PER_ALIAS;
+  return Math.min(Math.max(Math.trunc(number), 1), MAX_PAGES_PER_ALIAS);
+}
+
+function toPositiveInteger(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 1) return null;
+  return Math.trunc(number);
+}
+
+function extractPagerInfo(html) {
+  const match = String(html ?? "").match(/"pager"\s*:\s*(\{[^{}]*\})/);
+  if (!match) return null;
+
+  try {
+    const pager = JSON.parse(match[1]);
+    return {
+      count: toPositiveInteger(pager.count),
+      page: toPositiveInteger(pager.page),
+      lastPage: toPositiveInteger(pager.last_page),
+      isLastPage: Boolean(pager.is_last_page),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function normalizeForMatch(value) {
@@ -218,37 +312,110 @@ export function parseSearchHtml(html, alias, page, floorKey = "maniax") {
   return items;
 }
 
-export async function searchDlsiteAlias(alias, options = {}) {
-  const perPage = Math.min(Math.max(Number(options.perPage) || 30, 10), 100);
-  const maxPages = Math.min(Math.max(Number(options.maxPages) || 1, 1), 10);
-  const floors = searchFloors(options.scope);
-  const results = [];
-
-  for (const floor of floors) {
-    for (let page = 1; page <= maxPages; page += 1) {
-      const url = buildSearchUrl(floor, alias, page, perPage);
-      const cacheKey = `dlsite:${floor.key}:${alias}:${page}:${perPage}`;
-      let html = cache.get(cacheKey);
-
-      if (!html) {
-        const response = await politeFetch(url, {
-          minDelayMs: Number(options.minDelayMs) || 900,
-        });
-        html = await response.text();
-        cache.set(cacheKey, html);
-      }
-
-      const pageItems = parseSearchHtml(html, alias, page, floor.key);
-      results.push(...pageItems);
-      if (pageItems.length === 0 || pageItems.length < Math.min(perPage, 30)) break;
-    }
-  }
-
+function buildEmptyAliasResult(alias, order = DEFAULT_SEARCH_ORDER) {
   return {
     alias,
-    count: results.length,
-    items: results,
+    count: 0,
+    order: normalizeSearchOrder(order),
+    orderLabel: searchOrderLabel(order),
+    availableCount: 0,
+    pagesFetched: 0,
+    truncated: false,
+    floors: [],
+    items: [],
   };
+}
+
+function updateAliasResultSummary(result) {
+  result.count = result.items.length;
+  result.availableCount = result.floors.reduce(
+    (total, floor) => total + (floor.availableCount ?? floor.count),
+    0
+  );
+  result.pagesFetched = result.floors.reduce((total, floor) => total + floor.fetchedPages, 0);
+  result.truncated = result.floors.some((floor) => floor.truncated);
+  return result;
+}
+
+export async function searchDlsiteAliasProgressive(alias, options = {}, onProgress = async () => {}) {
+  const perPage = Math.min(Math.max(Number(options.perPage) || 100, 10), 100);
+  const maxPages = clampPageLimit(options.maxPages);
+  const order = normalizeSearchOrder(options.order);
+  const floors = searchFloors(options.scope);
+  const result = buildEmptyAliasResult(alias, order);
+
+  for (const floor of floors) {
+    const floorSummary = {
+      key: floor.key,
+      label: floor.label,
+      count: 0,
+      availableCount: null,
+      fetchedPages: 0,
+      maxPages,
+      truncated: false,
+    };
+    result.floors.push(floorSummary);
+
+    let reachedLastPage = false;
+
+    for (let page = 1; page <= maxPages; page += 1) {
+      let html;
+      try {
+        html = await readSearchPage(floor, alias, page, perPage, order, options);
+      } catch (error) {
+        if (page > 1 && /HTTP 404\b/.test(error.message)) break;
+        throw error;
+      }
+
+      const pager = extractPagerInfo(html);
+      if (pager?.count) floorSummary.availableCount = pager.count;
+
+      const pageItems = parseSearchHtml(html, alias, page, floor.key);
+      result.items.push(...pageItems);
+      floorSummary.count += pageItems.length;
+      floorSummary.fetchedPages = page;
+
+      if (pageItems.length === 0) {
+        reachedLastPage = true;
+      } else if (pager?.isLastPage || (pager?.lastPage && page >= pager.lastPage)) {
+        reachedLastPage = true;
+      } else if (!pager && pageItems.length < perPage) {
+        reachedLastPage = true;
+      }
+
+      updateAliasResultSummary(result);
+      await onProgress({
+        alias,
+        floor: floor.key,
+        page,
+        result,
+        complete: false,
+      });
+
+      if (reachedLastPage) break;
+    }
+
+    const reachedPageLimit = !reachedLastPage && floorSummary.fetchedPages >= maxPages;
+    floorSummary.truncated =
+      reachedPageLimit &&
+      (!floorSummary.availableCount || floorSummary.count < floorSummary.availableCount);
+    updateAliasResultSummary(result);
+    await onProgress({
+      alias,
+      floor: floor.key,
+      page: floorSummary.fetchedPages,
+      result,
+      complete: false,
+    });
+  }
+
+  updateAliasResultSummary(result);
+  await onProgress({
+    alias,
+    result,
+    complete: true,
+  });
+  return result;
 }
 
 function extractVerificationFields(html) {
@@ -366,10 +533,12 @@ export async function verifyDlsiteItems(items, aliases, options = {}) {
   return items;
 }
 
-export function aggregateDlsiteResults(aliasResults) {
+export function aggregateDlsiteResults(aliasResults, options = {}) {
+  const order = normalizeSearchOrder(options.order);
   const byId = new Map();
   const aliasSummaries = [];
   const errors = [];
+  let sourceOrder = 0;
 
   for (const result of aliasResults) {
     if (result.error) {
@@ -378,13 +547,26 @@ export function aggregateDlsiteResults(aliasResults) {
       continue;
     }
 
-    aliasSummaries.push({ alias: result.alias, count: result.count });
+    aliasSummaries.push({
+      alias: result.alias,
+      count: result.count,
+      order: result.order ?? order,
+      orderLabel: result.orderLabel ?? searchOrderLabel(order),
+      availableCount: result.availableCount ?? result.count,
+      pagesFetched: result.pagesFetched ?? 0,
+      truncated: Boolean(result.truncated),
+      floors: result.floors ?? [],
+    });
 
     for (const item of result.items ?? []) {
+      const itemSourceOrder = sourceOrder;
+      sourceOrder += 1;
+
       const existing = byId.get(item.productId);
       if (!existing) {
         byId.set(item.productId, {
           ...item,
+          sourceOrder: itemSourceOrder,
           matchedAliases: [...new Set(item.matchedAliases)],
           matchedPages: [...new Set(item.matchedPages)],
           verification: item.verification ?? unknownVerification(),
@@ -394,6 +576,8 @@ export function aggregateDlsiteResults(aliasResults) {
 
       existing.matchedAliases = [...new Set([...existing.matchedAliases, ...item.matchedAliases])];
       existing.matchedPages = [...new Set([...existing.matchedPages, ...item.matchedPages])];
+      existing.sourceOrder = Math.min(existing.sourceOrder ?? itemSourceOrder, itemSourceOrder);
+      if ((item.sales ?? -1) > (existing.sales ?? -1)) existing.sales = item.sales;
       if (AGE_RANK[item.ageCategory] > AGE_RANK[existing.ageCategory]) {
         existing.ageCategory = item.ageCategory;
         existing.ageLabel = item.ageLabel;
@@ -401,11 +585,7 @@ export function aggregateDlsiteResults(aliasResults) {
     }
   }
 
-  const items = [...byId.values()].sort((a, b) => {
-    const aliasDelta = b.matchedAliases.length - a.matchedAliases.length;
-    if (aliasDelta !== 0) return aliasDelta;
-    return a.title.localeCompare(b.title, "ja-JP");
-  });
+  const items = [...byId.values()].sort((a, b) => compareItemsBySearchOrder(a, b, order));
 
   const groups = Object.fromEntries(
     Object.entries(TYPE_LABELS).map(([key, label]) => [
@@ -422,11 +602,26 @@ export function aggregateDlsiteResults(aliasResults) {
   return {
     total: items.length,
     items,
+    order,
+    orderLabel: searchOrderLabel(order),
     groups,
     ageGroups,
     aliasSummaries,
+    truncated: aliasSummaries.some((summary) => summary.truncated),
+    truncatedAliases: aliasSummaries.filter((summary) => summary.truncated).map((summary) => summary.alias),
     errors,
   };
+}
+
+function compareItemsBySearchOrder(a, b, order) {
+  if (order === "dl_d") {
+    const salesDelta = (b.sales ?? -1) - (a.sales ?? -1);
+    if (salesDelta !== 0) return salesDelta;
+  }
+
+  const sourceDelta = (a.sourceOrder ?? 0) - (b.sourceOrder ?? 0);
+  if (sourceDelta !== 0) return sourceDelta;
+  return a.title.localeCompare(b.title, "ja-JP");
 }
 
 export function summarizeAgeGroups(items) {

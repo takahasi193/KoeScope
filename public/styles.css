@@ -91,6 +91,28 @@ h2 {
   white-space: nowrap;
 }
 
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.top-link {
+  min-height: 38px;
+  border: 1px solid rgba(8, 117, 111, 0.25);
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  font-weight: 850;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
 .status-pill.ok {
   border-color: rgba(8, 117, 111, 0.28);
   background: var(--accent-soft);
@@ -190,7 +212,7 @@ select:focus {
 
 .settings-row {
   display: grid;
-  grid-template-columns: 120px 140px 120px 120px 120px minmax(250px, 1fr);
+  grid-template-columns: 120px 140px 120px 120px 120px 120px minmax(250px, 1fr);
   gap: 12px;
   align-items: end;
   margin-top: 14px;
@@ -347,11 +369,6 @@ select:focus {
   color: var(--muted);
 }
 
-.result-actions {
-  display: flex;
-  gap: 8px;
-}
-
 .tabs {
   display: flex;
   gap: 8px;
@@ -473,7 +490,15 @@ select:focus {
   color: var(--muted);
 }
 
-.result-open {
+.result-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.result-open,
+.result-watch {
   min-height: 36px;
   border: 1px solid rgba(8, 117, 111, 0.3);
   border-radius: 7px;
@@ -484,6 +509,12 @@ select:focus {
   text-decoration: none;
   display: inline-flex;
   align-items: center;
+}
+
+.result-watch {
+  border-color: var(--line);
+  background: var(--surface-strong);
+  color: var(--ink);
 }
 
 .empty {
@@ -543,7 +574,7 @@ select:focus {
     grid-template-columns: 62px minmax(0, 1fr);
   }
 
-  .result-open {
+  .result-actions {
     grid-column: 2;
     justify-self: start;
   }

@@ -12,7 +12,10 @@
         <p class="eyebrow">Bangumi alias lookup -> DLsite age-aware search</p>
         <h1>DL Voice Search</h1>
       </div>
-      <div class="status-pill" id="serverStatus">连接中</div>
+      <div class="top-actions">
+        <a class="top-link" href="/dashboard.html">打开 Monitor 仪表盘</a>
+        <div class="status-pill" id="serverStatus">连接中</div>
+      </div>
     </header>
 
     <main class="shell">
@@ -32,15 +35,22 @@
             <input id="maxAliasesInput" type="number" min="1" max="80" value="12" />
           </label>
           <label>
-            <span>每个别名页数</span>
-            <input id="maxPagesInput" type="number" min="1" max="10" value="1" />
+            <span>每个别名最多页数</span>
+            <input id="maxPagesInput" type="number" min="1" max="100" value="50" />
           </label>
           <label>
             <span>每页数量</span>
             <select id="perPageInput">
-              <option value="30" selected>30</option>
+              <option value="30">30</option>
               <option value="50">50</option>
-              <option value="100">100</option>
+              <option value="100" selected>100</option>
+            </select>
+          </label>
+          <label>
+            <span>排序</span>
+            <select id="orderInput">
+              <option value="release_d" selected>最新</option>
+              <option value="dl_d">贩卖总数</option>
             </select>
           </label>
           <label>
@@ -87,10 +97,6 @@
             <div>
               <h2>结果</h2>
               <p id="resultSummary">先解析人物，再选择别名搜索。</p>
-            </div>
-            <div class="result-actions">
-              <button class="mini-action" id="exportJsonButton" type="button" disabled>JSON</button>
-              <button class="mini-action" id="exportCsvButton" type="button" disabled>CSV</button>
             </div>
           </div>
 

@@ -1,6 +1,6 @@
 # DL Voice Search
 
-本地 Web 应用 MVP：输入声优名或马甲，从 Bangumi 人物资料中解析别名，再按别名去 DLsite 搜索作品，去重后按音声/ASMR、游戏、漫画、CG、视频和其他分类，并区分全年龄、R15、R18。
+本地 Web 应用：输入声优名或马甲，从 Bangumi 人物资料中解析别名，再按别名搜索 DLsite 公开搜索结果。结果按作品形式和年龄分级筛选，搜索采用渐进式加载：前面抓到的内容先显示，剩余页数继续在后台自动加载。
 
 ## 使用
 
@@ -11,35 +11,33 @@ npm start
 
 打开 `http://localhost:5178`。
 
-## 工作流
+监测仪表盘位于 `http://localhost:5178/dashboard.html`。默认每日检查一次 DLsite 总榜、ASMR、游戏和漫画排行榜，也可以在页面中手动点击“同步”。
 
-1. 输入名字，例如 `青山ゆかり`。
-2. 点击“解析人物”，从 Bangumi API 获取候选人物和 `infobox` 别名。
-3. 选择正确候选人，勾选要搜索的别名。
-4. 选择年龄范围：全部、仅 R18、全年龄/R15。
-5. 如果搜索范围包含 R18，确认 R18 使用条件后点击“搜索 DLsite”。
-6. 需要降低误报时勾选“详情验证”，它会逐个打开作品页确认声优/作者/制作人员相关字段。
-7. 查看作品形式与年龄分级筛选结果，或导出 JSON/CSV。
+## 工作流程
 
-## 注意
+1. 输入声优名或马甲，例如 `青山ゆかり`。
+2. 点击“解析人物”，从 Bangumi API 获取候选人物和 infobox 别名。
+3. 选择正确候选人物，勾选要搜索的别名。
+4. 选择年龄范围、排序、每个别名最多页数和每页数量。
+5. 如果搜索范围包含 R18，确认合法年龄与地区后再搜索。
+6. 点击“搜索 DLsite”，程序会一次性启动完整搜索任务。
+7. 首批结果会先显示，后续页数在后台自动补入列表，直到当前配置范围加载完成。
 
-- 这是个人本地研究工具，不内置账号、登录、购买或绕过年龄确认的能力。
-- 后端对 Bangumi 和 DLsite 请求做了缓存与保守限速；请不要把别名上限和页数调得过高。
-- “详情验证”默认关闭，因为它会为每个去重作品额外请求详情页。
-- 默认年龄范围是“全部”，会同时搜索 DLsite `maniax` 和 `home` 两个公开搜索结果页；只关心 R18 时可改为“仅 R18”以减少请求量。
-- Bangumi 数据来自 `https://api.bgm.tv/v0`；DLsite 搜索使用公开搜索结果页，页面结构变化时可能需要更新解析器。
-- 如果对外发布，请先核对 Bangumi 与 DLsite 的 API/站点条款，并设置 `APP_USER_AGENT` 为可联系的应用标识。
-- 公开仓库只包含本地检索工具代码，不托管成人素材、作品内容、下载资源，也不提供绕过访问限制或年龄确认的功能。
+## 说明
+
+- 后端对 Bangumi 和 DLsite 请求做了缓存和保守限速。
+- DLsite Monitor 使用本地 SQLite 数据库保存排行榜快照、价格历史、关注列表和站内提醒；数据库默认写入 `data/dlsite-monitor.sqlite`。
+- 排行榜同步覆盖 `home` 与 `maniax` 的总榜、ASMR、游戏和漫画范围，并按较慢节奏请求 DLsite 公开页面与站内 JSON 端点。
+- 同步会先保存排行榜快照并逐步显示；只有排行榜页缺少关键信息时才请求详情接口补充。默认请求间隔为 1.5 秒，可用 `DLSITE_MONITOR_DELAY_MS` 调整。
+- 价格提醒只对关注作品生成；默认规则是降价至少 20% 或 500 円，或达到用户设置的目标价。
+- “每个别名最多页数”默认是 50，可按需要调低以减少请求量。
+- “详情验证”默认关闭；开启后会在作品页加载完成后逐个请求详情页确认声优/作者/制作人员相关字段。
+- 搜索任务保存在当前本地后端进程内，任务结果会保留一段时间；重启后端会清空任务状态。
+- 项目不提供下载、购买、绕过访问限制或绕过年龄确认的能力。
 
 ## Chrome 插件
 
-纯 Chrome 插件可以做 UI，但跨站请求、User-Agent、限速缓存和站点条款处理都会更麻烦。推荐后续做成“插件 + 本地后端”：
-
-- 插件只负责浏览器入口、右键搜索和结果展示。
-- 本地后端复用当前 `src/lib` 里的 Bangumi/DLsite 逻辑。
-- 插件通过 `http://localhost:5178/api/search` 调用本地服务。
-
-项目已提供 Chrome Manifest V3 插件，位于 `extension/`：
+`extension/` 目录提供 Manifest V3 插件入口。插件只访问本地后端，不直接请求 Bangumi 或 DLsite。
 
 1. 先运行本地后端：
 
@@ -48,23 +46,29 @@ npm install
 npm start
 ```
 
-2. 打开 Chrome 的 `chrome://extensions`，开启“开发者模式”。
+2. 打开 Chrome 的 `chrome://extensions`，启用“开发者模式”。
 3. 选择“加载已解压的扩展程序”，加载项目里的 `extension/` 目录。
-4. 点击插件图标，或在网页中选中文本后右键选择“用 DL Voice Search 搜索”。
+4. 点击插件图标，或在网页中选中文本后右键搜索。
 
-插件只请求本机 `http://localhost:*` 或 `http://127.0.0.1:*`，不会直接访问 Bangumi 或 DLsite。
-
-插件当前支持：
+插件支持：
 
 - 配置本地后端地址并检查连接状态。
-- 保存最近搜索词，便于重复查询。
+- 保存最近搜索词。
 - 快捷选择马甲、全选或清空别名。
-- 设置年龄范围、页数、每页数量和详情验证。
-- 按作品形式与年龄分级筛选弹窗结果。
+- 设置年龄范围、排序、页数、每页数量和详情验证。
+- 按作品形式与年龄分级筛选渐进加载中的结果。
 - 将当前搜索词带入完整本地页面。
 
-## 后续可选改进
+## 接口
 
-- 增加插件 options 页面，把后端地址和默认搜索参数移出弹窗。
-- 为插件弹窗补充自动化 UI 回归测试。
-- 打包 `extension/` 为可分发 ZIP，并补充版本发布流程。
+- `GET /api/health`：健康检查。
+- `POST /api/persons`：解析 Bangumi 候选人物。
+- `POST /api/search/progressive`：创建渐进式 DLsite 搜索任务。
+- `GET /api/search/progressive/:id`：轮询搜索任务进度和当前结果。
+- `POST /api/sync/dlsite-rankings`：启动 DLsite 总榜与分类排行榜同步。
+- `GET /api/sync/status`：查看当前同步状态、最近一次运行和下次计划时间。
+- `GET /api/dashboard/summary`：获取仪表盘 KPI、未读提醒和明显降价作品。
+- `GET /api/rankings?floor=home|maniax&period=day|week|month&category=all|voice|game|manga`：读取最近总榜或分类排行榜快照。
+- `GET /api/works/:id/history`：读取单个作品的价格和排名历史。
+- `GET /api/watchlist` / `POST /api/watchlist` / `DELETE /api/watchlist/:id`：读取、添加或移除关注作品。
+- `GET /api/alerts?status=unread|all` / `POST /api/alerts/:id/read`：读取提醒并标记已读。

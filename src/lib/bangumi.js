@@ -4,6 +4,10 @@ import { politeFetch } from "./fetcher.js";
 const API_BASE = "https://api.bgm.tv/v0";
 const cache = new TTLCache(1000 * 60 * 60 * 12);
 
+function personCacheKey(personId, keyword = "") {
+  return `person:${personId}:${normalizeSpace(keyword)}`;
+}
+
 const SPLIT_ALIAS_PATTERN = /[=＝、,，;；/／|｜]+/u;
 const WRAPPED_PART_PATTERN = /[（(]([^()（）]{2,40})[）)]/gu;
 const TRIM_ALIAS_PATTERN = /^[：:＝=、,，;；/／|｜\s]+|[：:＝=、,，;；/／|｜\s]+$/gu;
@@ -214,6 +218,10 @@ export async function searchPersons(keyword, limit = 10) {
     .map((person) => compactPerson(person, normalizedKeyword))
     .sort((a, b) => b.score - a.score);
 
+  for (const person of persons) {
+    cache.set(personCacheKey(person.id, normalizedKeyword), person);
+  }
+
   const result = {
     keyword: normalizedKeyword,
     total: payload.total ?? persons.length,
@@ -227,7 +235,7 @@ export async function getPerson(personId, keyword = "") {
   const id = Number(personId);
   if (!Number.isFinite(id)) throw new Error("personId must be a number");
 
-  const cacheKey = `person:${id}:${keyword}`;
+  const cacheKey = personCacheKey(id, keyword);
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 

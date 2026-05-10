@@ -27,6 +27,20 @@
         </div>
       </details>
 
+      <section class="panel account-panel">
+        <div class="panel-head">
+          <h2>DLsite 账号</h2>
+          <span id="accountStatus">未连接</span>
+        </div>
+        <p class="account-copy" id="accountSummary">先在 Chrome 登录 DLsite，再点击同步账号。</p>
+        <div class="account-actions">
+          <button id="openDlsiteLoginButton" type="button" class="link-button">打开登录</button>
+          <button id="syncDlsiteAccountButton" type="button" class="secondary">快速同步</button>
+          <button id="deepSyncDlsiteAccountButton" type="button" class="link-button">深度同步</button>
+          <button id="openDashboardButton" type="button" class="link-button">仪表盘</button>
+        </div>
+      </section>
+
       <section class="query">
         <label>
           <span>声优名或马甲</span>
@@ -48,15 +62,22 @@
           </select>
         </label>
         <label>
-          <span>页数</span>
-          <input id="pagesInput" type="number" min="1" max="3" value="1" />
+          <span>排序</span>
+          <select id="orderInput">
+            <option value="release_d" selected>最新</option>
+            <option value="dl_d">贩卖总数</option>
+          </select>
+        </label>
+        <label>
+          <span>最多页数</span>
+          <input id="pagesInput" type="number" min="1" max="100" value="50" />
         </label>
         <label>
           <span>每页</span>
           <select id="perPageInput">
-            <option value="30" selected>30</option>
+            <option value="30">30</option>
             <option value="50">50</option>
-            <option value="100">100</option>
+            <option value="100" selected>100</option>
           </select>
         </label>
         <label class="check muted-check">

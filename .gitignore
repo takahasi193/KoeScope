@@ -4,3 +4,5 @@ dist/
 .env
 .cache/
 dev-logs/
+data/
+.chrome-dlvoice-profile/

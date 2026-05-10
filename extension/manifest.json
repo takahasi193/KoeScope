@@ -11,6 +11,11 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["contextMenus", "storage"],
-  "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"]
+  "permissions": ["contextMenus", "storage", "tabs", "scripting"],
+  "host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://dlsite.com/*",
+    "https://*.dlsite.com/*"
+  ]
 }

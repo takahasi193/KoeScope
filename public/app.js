@@ -1,3 +1,5 @@
+const DEFAULT_MAX_PAGES = 50;
+
 const state = {
   keyword: "",
   candidates: [],
@@ -5,6 +7,9 @@ const state = {
   results: null,
   activeType: "all",
   activeAge: "all",
+  searchJobId: null,
+  searchPollTimer: null,
+  searchRunToken: 0,
 };
 
 const els = {
@@ -15,6 +20,7 @@ const els = {
   maxAliasesInput: document.querySelector("#maxAliasesInput"),
   maxPagesInput: document.querySelector("#maxPagesInput"),
   perPageInput: document.querySelector("#perPageInput"),
+  orderInput: document.querySelector("#orderInput"),
   ageScopeInput: document.querySelector("#ageScopeInput"),
   verifyDetailsInput: document.querySelector("#verifyDetailsInput"),
   adultConfirm: document.querySelector("#adultConfirm"),
@@ -29,8 +35,6 @@ const els = {
   categoryTabs: document.querySelector("#categoryTabs"),
   ageTabs: document.querySelector("#ageTabs"),
   resultList: document.querySelector("#resultList"),
-  exportJsonButton: document.querySelector("#exportJsonButton"),
-  exportCsvButton: document.querySelector("#exportCsvButton"),
   toast: document.querySelector("#toast"),
 };
 
@@ -54,11 +58,29 @@ async function postJson(url, body) {
   return payload;
 }
 
+async function getJson(url) {
+  const response = await fetch(url);
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || "请求失败");
+  return payload;
+}
+
+function searchIsRunning() {
+  return Boolean(state.results?.progress && !state.results.progress.isComplete);
+}
+
 function setBusy(isBusy, label = "") {
   els.resolveButton.disabled = isBusy;
-  els.runButton.disabled = isBusy || !state.selectedPersonId;
+  els.runButton.disabled = isBusy || !state.selectedPersonId || searchIsRunning();
   document.body.classList.toggle("loading", isBusy);
   if (label) els.resultSummary.textContent = label;
+}
+
+function clearSearchPolling() {
+  clearTimeout(state.searchPollTimer);
+  state.searchPollTimer = null;
+  state.searchJobId = null;
+  state.searchRunToken += 1;
 }
 
 function selectedPerson() {
@@ -93,6 +115,7 @@ function renderCandidates() {
       </span>
     `;
     button.addEventListener("click", () => {
+      clearSearchPolling();
       state.selectedPersonId = person.id;
       state.results = null;
       state.activeType = "all";
@@ -128,15 +151,14 @@ function renderAliases() {
     els.aliasGrid.append(label);
   });
 
-  els.runButton.disabled = false;
+  els.runButton.disabled = searchIsRunning();
 }
 
 function groupCounts(results) {
-  const groups = {
+  return {
     all: { key: "all", label: "全部", count: results?.total ?? 0 },
     ...(results?.groups ?? {}),
   };
-  return groups;
 }
 
 function ageGroupCounts(results, activeType = "all") {
@@ -208,12 +230,69 @@ function ageSummary(results) {
   return parts.length ? `，${parts.join("，")}` : "";
 }
 
+function pageLimitSummary(results) {
+  const count = results?.truncatedAliases?.length ?? 0;
+  return count > 0 ? `，${count} 个别名达到页数上限` : "";
+}
+
+function orderSummary(results) {
+  return results?.orderLabel ? `，排序 ${results.orderLabel}` : "";
+}
+
+function timingSummary(results) {
+  const totalMs = results?.timing?.totalMs;
+  return Number.isFinite(totalMs) ? `，耗时 ${(totalMs / 1000).toFixed(1)}s` : "";
+}
+
+function progressSummary(results) {
+  const progress = results?.progress;
+  if (!progress) return "";
+  if (progress.status === "verifying") return "，作品已加载完，正在详情验证";
+  if (progress.status === "completed") {
+    return `，已完成，实际加载 ${progress.pagesFetched} 页（上限 ${progress.totalPageBudget} 页）`;
+  }
+  if (progress.status === "failed") return "，后台加载失败";
+  return `，后台加载中 ${progress.pagesFetched}/${progress.totalPageBudget} 页上限`;
+}
+
+async function importResultToMonitor(item) {
+  const raw = window.prompt("目标价（日元，可留空）", item.priceJpy ? String(item.priceJpy) : "");
+  if (raw === null) return;
+  const targetPriceJpy = raw.trim() ? Number(raw.trim()) : null;
+  if (raw.trim() && (!Number.isFinite(targetPriceJpy) || targetPriceJpy < 0)) {
+    toast("目标价需要是有效数字。");
+    return;
+  }
+
+  await postJson("/api/watchlist/import", {
+    targetPriceJpy,
+    work: {
+      productId: item.productId,
+      title: item.title,
+      url: item.url,
+      imageUrl: item.image,
+      circle: item.circle,
+      circleId: (item.circleUrl || "").match(/maker_id\/([^/.]+)/)?.[1] ?? "",
+      floor: item.floor,
+      ageCategory: item.ageCategory,
+      workType: item.workType,
+      categoryLabel: item.category,
+      genres: item.genres,
+      priceJpy: item.priceJpy,
+      officialPriceJpy: item.priceJpy,
+      sales: item.sales,
+      ratingCount: item.ratingCount,
+      raw: { source: "dl_voice_search_result" },
+    },
+  });
+  toast("已加入监测关注。");
+}
+
 function renderResults() {
   const results = state.results;
   renderTabs();
   els.resultList.innerHTML = "";
-  els.exportJsonButton.disabled = !results;
-  els.exportCsvButton.disabled = !results;
+  els.runButton.disabled = !state.selectedPersonId || searchIsRunning();
 
   if (!results) {
     els.resultSummary.textContent = "先解析人物，再选择别名搜索。";
@@ -223,10 +302,11 @@ function renderResults() {
 
   const errors = results.errors?.length ? `，${results.errors.length} 个别名失败` : "";
   const verification = verificationSummary(results);
-  els.resultSummary.textContent = `已搜索 ${results.searchedAliases.length} 个别名，去重后 ${results.total} 个作品${ageSummary(results)}${errors}${verification}。`;
+  const progress = progressSummary(results);
+  const timing = timingSummary(results);
+  els.resultSummary.textContent = `已搜索 ${results.searchedAliases.length} 个别名，去重后 ${results.total} 个作品${orderSummary(results)}${ageSummary(results)}${pageLimitSummary(results)}${errors}${verification}${progress}${timing}。`;
 
   const visibleItems = filteredItems(results);
-
   if (visibleItems.length === 0) {
     els.resultList.innerHTML = '<div class="empty">当前筛选没有结果。</div>';
     return;
@@ -253,8 +333,14 @@ function renderResults() {
           ${verifiedAliasLine(item)}
         </div>
       </div>
-      <a class="result-open" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">打开</a>
+      <div class="result-actions">
+        <button class="result-watch" type="button">监测</button>
+        <a class="result-open" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">打开</a>
+      </div>
     `;
+    node.querySelector(".result-watch").addEventListener("click", () => {
+      importResultToMonitor(item).catch((error) => toast(error.message));
+    });
     els.resultList.append(node);
   }
 }
@@ -302,6 +388,42 @@ function selectedAliases() {
   return [...els.aliasGrid.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value);
 }
 
+function scheduleSearchPoll(delayMs = 1000) {
+  clearTimeout(state.searchPollTimer);
+  const jobId = state.searchJobId;
+  const token = state.searchRunToken;
+  if (!jobId) return;
+
+  state.searchPollTimer = setTimeout(() => {
+    pollProgressiveSearch(jobId, token);
+  }, delayMs);
+}
+
+async function pollProgressiveSearch(jobId, token) {
+  if (!jobId || token !== state.searchRunToken) return;
+
+  try {
+    const payload = await getJson(`/api/search/progressive/${encodeURIComponent(jobId)}`);
+    if (token !== state.searchRunToken) return;
+
+    state.results = payload;
+    renderResults();
+
+    if (payload.progress?.isComplete) {
+      state.searchJobId = null;
+      toast(payload.progress.status === "failed" ? "后台加载失败。" : "DLsite 搜索完成。");
+      return;
+    }
+
+    scheduleSearchPoll(1000);
+  } catch (error) {
+    if (token !== state.searchRunToken) return;
+    clearSearchPolling();
+    renderResults();
+    toast(error.message);
+  }
+}
+
 async function resolvePersons() {
   const keyword = els.keywordInput.value.trim();
   if (!keyword) {
@@ -310,6 +432,7 @@ async function resolvePersons() {
   }
 
   state.keyword = keyword;
+  clearSearchPolling();
   setBusy(true, "正在从 Bangumi 解析候选人物与别名...");
 
   try {
@@ -330,12 +453,13 @@ async function resolvePersons() {
   }
 }
 
-async function runDlsiteSearch() {
+async function runProgressiveDlsiteSearch() {
   const person = selectedPerson();
   if (!person) {
     toast("请先选择候选人物。");
     return;
   }
+
   const scope = els.ageScopeInput.value || "all";
   if (scope !== "nonAdult" && !els.adultConfirm.checked) {
     toast("请先确认 R18 使用条件。");
@@ -348,29 +472,44 @@ async function runDlsiteSearch() {
     return;
   }
 
-  setBusy(true, `正在搜索 DLsite：${aliases.length} 个别名，可能需要一点时间...`);
+  clearSearchPolling();
+  setBusy(true, `正在启动 DLsite 后台搜索，${aliases.length} 个别名会一次性加载完整内容...`);
 
   try {
-    const payload = await postJson("/api/search", {
+    const payload = await postJson("/api/search/progressive", {
       keyword: state.keyword || els.keywordInput.value.trim(),
       personId: person.id,
       aliases,
       scope,
+      order: els.orderInput.value || "release_d",
       verifyDetails: els.verifyDetailsInput.checked,
       maxAliases: Number(els.maxAliasesInput.value) || 12,
-      maxPagesPerAlias: Number(els.maxPagesInput.value) || 1,
-      perPage: Number(els.perPageInput.value) || 30,
+      maxPagesPerAlias: Number(els.maxPagesInput.value) || DEFAULT_MAX_PAGES,
+      perPage: Number(els.perPageInput.value) || 100,
     });
     state.results = payload;
+    state.searchJobId = payload.progress?.jobId ?? null;
     state.activeType = "all";
     state.activeAge = "all";
     renderResults();
-    toast("DLsite 搜索完成。");
+
+    if (state.searchJobId && !payload.progress?.isComplete) {
+      scheduleSearchPoll(700);
+      toast("已显示首批结果，剩余内容正在后台加载。");
+    } else {
+      toast("DLsite 搜索完成。");
+    }
   } catch (error) {
+    clearSearchPolling();
     toast(error.message);
   } finally {
     setBusy(false);
   }
+}
+
+async function refreshSearchAfterOrderChange() {
+  if (!state.results || !selectedPerson()) return;
+  await runProgressiveDlsiteSearch();
 }
 
 function setAliasSelection(mode) {
@@ -392,69 +531,6 @@ function setAliasSelection(mode) {
       input.checked = false;
     });
   }
-}
-
-function exportJson() {
-  if (!state.results) return;
-  downloadBlob(
-    `dl-voice-search-${Date.now()}.json`,
-    "application/json",
-    JSON.stringify(state.results, null, 2)
-  );
-}
-
-function exportCsv() {
-  if (!state.results) return;
-  const rows = [
-    [
-      "productId",
-      "title",
-      "type",
-      "ageCategory",
-      "ageLabel",
-      "category",
-      "circle",
-      "priceJpy",
-      "sales",
-      "matchedAliases",
-      "verificationStatus",
-      "verifiedAliases",
-      "verificationFields",
-      "url",
-    ],
-    ...state.results.items.map((item) => [
-      item.productId,
-      item.title,
-      item.typeLabel,
-      item.ageCategory ?? "",
-      item.ageLabel ?? "",
-      item.category,
-      item.circle,
-      item.priceJpy ?? "",
-      item.sales ?? "",
-      item.matchedAliases.join(" / "),
-      item.verification?.status ?? "unknown",
-      item.verification?.matchedAliases?.join(" / ") ?? "",
-      item.verification?.fields?.join(" / ") ?? "",
-      item.url,
-    ]),
-  ];
-  const csv = rows.map((row) => row.map(csvCell).join(",")).join("\n");
-  downloadBlob(`dl-voice-search-${Date.now()}.csv`, "text/csv;charset=utf-8", csv);
-}
-
-function csvCell(value) {
-  return `"${String(value ?? "").replaceAll('"', '""')}"`;
-}
-
-function downloadBlob(filename, type, content) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 function escapeHtml(value) {
@@ -493,16 +569,15 @@ function readInitialKeyword() {
 }
 
 els.resolveButton.addEventListener("click", resolvePersons);
-els.runButton.addEventListener("click", runDlsiteSearch);
+els.runButton.addEventListener("click", runProgressiveDlsiteSearch);
 els.keywordInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") resolvePersons();
 });
 els.maxAliasesInput.addEventListener("change", renderAliases);
+els.orderInput.addEventListener("change", refreshSearchAfterOrderChange);
 els.selectPenNamesButton.addEventListener("click", () => setAliasSelection("pen"));
 els.selectAllAliasesButton.addEventListener("click", () => setAliasSelection("all"));
 els.clearAliasesButton.addEventListener("click", () => setAliasSelection("none"));
-els.exportJsonButton.addEventListener("click", exportJson);
-els.exportCsvButton.addEventListener("click", exportCsv);
 
 const hasInitialKeyword = readInitialKeyword();
 renderCandidates();
