@@ -28,6 +28,13 @@ npm start
 - Monitor：`http://localhost:5178/dashboard.html`
 - 活动中心：`http://localhost:5178/activities.html`
 
+Windows 快捷启动：
+
+- 双击项目根目录的 `Start-KoeScope.cmd`
+- 或双击 `E:\DL Manager\Start-KoeScope.cmd`
+
+快捷启动会自动检查 `5178` 端口；如果 KoeScope 尚未运行，会在后台启动 `npm start`，等待 `/api/health` 可用后打开首页。日志写入 `dev-logs/koescope-launch.out.log` 和 `dev-logs/koescope-launch.err.log`。
+
 运行测试：
 
 ```bash
