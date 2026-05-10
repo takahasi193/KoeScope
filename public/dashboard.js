@@ -470,7 +470,7 @@ function renderAccount() {
 
   if (!account.hasSession) {
     els.accountState.textContent = "未连接";
-    els.accountMeta.textContent = "在 Chrome 中登录 DLsite 后，通过 DL Voice Search Companion 扩展同步账号。";
+    els.accountMeta.textContent = "在 Chrome 中登录 DLsite 后，通过 KoeScope Companion 扩展同步账号。";
     return;
   }
 
@@ -662,7 +662,7 @@ async function startActivitySync() {
 }
 
 async function syncAccount() {
-  toast("请在 Chrome 工具栏打开 DL Voice Search Companion，并点击“同步账号”。");
+  toast("请在 Chrome 工具栏打开 KoeScope Companion，并点击“同步账号”。");
 }
 
 async function clearAccountSession() {

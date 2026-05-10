@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "DL Voice Search Companion",
+  "name": "KoeScope Companion",
   "version": "0.1.0",
-  "description": "Browser entry point for the local DL Voice Search backend.",
+  "description": "Browser entry point for the local KoeScope backend.",
   "action": {
     "default_popup": "popup.html",
-    "default_title": "DL Voice Search"
+    "default_title": "KoeScope"
   },
   "background": {
     "service_worker": "background.js",

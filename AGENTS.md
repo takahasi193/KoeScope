@@ -1,8 +1,8 @@
-# DLVoiceSearch Project Notes
+# KoeScope Project Notes
 
 ## Project
 
-Local DLsite helper app at `E:\DL Manager\DLVoiceSearch`.
+Local DLsite helper app at `E:\DL Manager\KoeScope`.
 
 It is a Node.js 20 + Express 5 app with a plain HTML/CSS/JS frontend, SQLite persistence via `better-sqlite3`, DLsite/Bangumi scraping via `fetch` + `cheerio`, and a Chrome companion extension in `extension/`.
 

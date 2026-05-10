@@ -2,7 +2,7 @@ import { sleep } from "./cache.js";
 
 const DEFAULT_USER_AGENT =
   process.env.APP_USER_AGENT ||
-  "DLVoiceSearch/0.1 (local personal research tool; set APP_USER_AGENT for contact info)";
+  "KoeScope/0.1 (local personal research tool; set APP_USER_AGENT for contact info)";
 
 const lastRequestAtByHost = new Map();
 const hostQueues = new Map();

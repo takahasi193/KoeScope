@@ -1,4 +1,4 @@
-const MENU_ID = "dl-voice-search-selection";
+const MENU_ID = "koescope-selection";
 const ACCOUNT_SYNC_STATUS_KEY = "dlsiteAccountSyncStatus";
 const ACCOUNT_LIST_MAX_PAGES = 30;
 const DLSITE_ACCOUNT_PAGES = [
@@ -372,7 +372,7 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: MENU_ID,
-      title: '用 DL Voice Search 搜索 "%s"',
+      title: '用 KoeScope 搜索 "%s"',
       contexts: ["selection"],
     });
   });

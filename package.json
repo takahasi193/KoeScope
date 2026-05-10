@@ -1,8 +1,8 @@
 {
-  "name": "dl-voice-search",
+  "name": "koescope",
   "version": "0.1.0",
   "private": true,
-  "description": "Local Bangumi alias lookup and DLsite R18 work search helper.",
+  "description": "Local Bangumi voice actor work search and DLsite monitor helper.",
   "type": "module",
   "scripts": {
     "start": "node src/server.js",

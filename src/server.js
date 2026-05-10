@@ -494,7 +494,7 @@ export function startServer({ port = Number(process.env.PORT) || 5178 } = {}) {
   const app = createApp({ monitor });
   monitor.startDailyScheduler();
   return app.listen(port, () => {
-    console.log(`DL Voice Search is running at http://localhost:${port}`);
+    console.log(`KoeScope is running at http://localhost:${port}`);
   });
 }
 

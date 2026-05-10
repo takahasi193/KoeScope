@@ -295,7 +295,7 @@ test("dashboard account sync directs users to the extension path", async () => {
 
   assert.equal(
     elements.get("#toast").textContent,
-    "请在 Chrome 工具栏打开 DL Voice Search Companion，并点击“同步账号”。"
+    "请在 Chrome 工具栏打开 KoeScope Companion，并点击“同步账号”。"
   );
   assert.equal(requests.some((request) => request.path === "/api/account/dlsite/sync"), false);
 });

@@ -191,7 +191,7 @@ function renderProfile() {
   if (!profile) return;
 
   const person = profile.person ?? {};
-  document.title = `${person.name || "声优详情"} - DL Voice Search`;
+  document.title = `${person.name || "声优详情"} - KoeScope`;
   els.personName.textContent = person.name || "未命名人物";
   els.personImage.src = person.image || "";
   els.personImage.alt = person.name || "";
