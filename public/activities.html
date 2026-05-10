@@ -4,13 +4,15 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>DLsite 活动中心</title>
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/dashboard.css" />
   </head>
   <body>
     <header class="monitor-topbar">
-      <div>
-        <p class="eyebrow">DLsite activities</p>
+      <div class="brand-block">
+        <p class="eyebrow">Activity 04 / DLsite 活动</p>
         <h1>活动中心</h1>
+        <p class="top-lead">活动、提醒与相关作品筛选</p>
       </div>
       <nav class="top-actions" aria-label="页面操作">
         <a class="link-action" href="/dashboard.html">返回 Monitor</a>
@@ -21,7 +23,7 @@
     </header>
 
     <main class="monitor-shell activity-center-shell">
-      <section class="metric-strip activity-center-metrics" aria-label="活动概览">
+      <section class="metric-strip activity-center-metrics" data-section="01 Metrics" aria-label="活动概览">
         <div>
           <span>当前结果</span>
           <strong id="activityResultCount">0</strong>
@@ -40,7 +42,7 @@
         </div>
       </section>
 
-      <section class="activity-center-controls" aria-label="活动筛选">
+      <section class="activity-center-controls" data-section="02 Filter" aria-label="活动筛选">
         <div class="activity-filter-block">
           <span>福利类型</span>
           <div class="segmented-control" role="group" aria-label="福利类型">
@@ -72,7 +74,7 @@
         </label>
       </section>
 
-      <section class="activity-pane activity-center-pane">
+      <section class="activity-pane activity-center-pane" data-section="03 Activity">
         <div class="section-head activity-head">
           <div>
             <h2>活动列表</h2>

@@ -4,14 +4,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>声优详情 - DL Voice Search</title>
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/person.css" />
   </head>
   <body>
     <header class="topbar">
-      <div>
-        <p class="eyebrow">Local search history</p>
+      <div class="brand-block">
+        <p class="eyebrow">Works 02 / 本地搜索历史</p>
         <h1>声优详情</h1>
+        <p class="top-lead">人物资料、别名与作品记录</p>
       </div>
       <div class="top-actions">
         <a class="top-link" href="/">返回搜索</a>
@@ -21,7 +23,7 @@
     </header>
 
     <main class="shell person-shell">
-      <section class="person-workspace">
+      <section class="person-workspace" data-section="01 Profile">
         <img id="personImage" class="person-avatar" alt="" />
         <div class="person-title-block">
           <p class="eyebrow" id="dataSource">数据来自本地搜索历史</p>
@@ -40,7 +42,7 @@
 
       <section class="person-layout">
         <aside class="person-side">
-          <section class="side-panel">
+          <section class="side-panel" data-section="02 Alias">
             <div class="panel-head">
               <h2>别名</h2>
               <span id="aliasCount">0</span>
@@ -48,7 +50,7 @@
             <div class="alias-grid person-alias-list" id="aliasList"></div>
           </section>
 
-          <section class="side-panel">
+          <section class="side-panel" data-section="03 Timeline">
             <div class="panel-head">
               <h2>最近搜索</h2>
               <span id="searchCount">0</span>
@@ -57,7 +59,7 @@
           </section>
         </aside>
 
-        <section class="main-panel person-main">
+        <section class="main-panel person-main" data-section="04 Works">
           <div class="stats-grid" id="statsGrid"></div>
 
           <div class="result-head person-result-head">

@@ -4,13 +4,15 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>DLsite Monitor</title>
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/dashboard.css" />
   </head>
   <body>
     <header class="monitor-topbar">
-      <div>
-        <p class="eyebrow">Local SQLite monitor</p>
+      <div class="brand-block">
+        <p class="eyebrow">Monitor 03 / Local SQLite</p>
         <h1>DLsite Monitor</h1>
+        <p class="top-lead">价格、排行、活动与关注状态</p>
       </div>
       <nav class="top-actions" aria-label="页面操作">
         <a class="link-action" href="/">返回 DLVoiceSearch 搜索</a>
@@ -20,7 +22,7 @@
     </header>
 
     <main class="monitor-shell">
-      <section class="metric-strip" aria-label="监测概览">
+      <section class="metric-strip" data-section="01 Metrics" aria-label="监测概览">
         <div>
           <span>作品</span>
           <strong id="totalWorks">0</strong>
@@ -56,7 +58,7 @@
         <span id="nextSyncText">每日自动同步。</span>
       </section>
 
-      <section class="activity-pane" id="activities">
+      <section class="activity-pane" id="activities" data-section="02 Activity">
         <div class="section-head activity-head">
           <div>
             <h2>DLsite 活动</h2>
@@ -73,7 +75,7 @@
       </section>
 
       <section class="monitor-layout">
-        <section class="ranking-pane">
+        <section class="ranking-pane" data-section="03 Ranking">
           <div class="section-head">
             <div>
               <h2>排行榜</h2>
@@ -123,7 +125,7 @@
         </section>
 
         <aside class="side-rail">
-          <section class="side-section account-section">
+          <section class="side-section account-section" data-section="04 Account">
             <div class="section-head compact">
               <h2>DLsite 账号</h2>
               <button class="text-action" id="accountSyncButton" type="button">扩展同步</button>
