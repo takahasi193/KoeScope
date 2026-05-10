@@ -6,6 +6,8 @@ const state = {
   ranking: null,
   summary: null,
   status: null,
+  activityStatus: null,
+  activities: null,
   account: null,
   recommendations: null,
   alerts: [],
@@ -31,7 +33,6 @@ const PERIOD_LABELS = {
   week: "周榜",
   month: "月榜",
 };
-
 const els = {
   syncButton: document.querySelector("#syncButton"),
   syncStatus: document.querySelector("#syncStatus"),
@@ -40,8 +41,15 @@ const els = {
   watchedWorks: document.querySelector("#watchedWorks"),
   unreadAlerts: document.querySelector("#unreadAlerts"),
   accountPoints: document.querySelector("#accountPoints"),
+  activeActivities: document.querySelector("#activeActivities"),
+  unreadActivityAlerts: document.querySelector("#unreadActivityAlerts"),
   lastSyncText: document.querySelector("#lastSyncText"),
   nextSyncText: document.querySelector("#nextSyncText"),
+  activitySyncButton: document.querySelector("#activitySyncButton"),
+  activityStatus: document.querySelector("#activityStatus"),
+  activityCaption: document.querySelector("#activityCaption"),
+  activityAccount: document.querySelector("#activityAccount"),
+  activityList: document.querySelector("#activityList"),
   categoryInput: document.querySelector("#categoryInput"),
   floorInput: document.querySelector("#floorInput"),
   periodInput: document.querySelector("#periodInput"),
@@ -129,6 +137,23 @@ function escapeAttribute(value) {
   return escapeHtml(value).replaceAll("`", "&#096;");
 }
 
+const activityUi = window.DlsiteActivityUi.createActivityUi({
+  formatNumber,
+  formatPrice,
+  formatDate,
+  escapeHtml,
+  escapeAttribute,
+  detailPreviewLength: 54,
+  relatedPreviewLimit: 2,
+  detailFactLimit: 4,
+});
+const {
+  formatTimeLeft,
+  formatActivityWindow,
+  renderActivityAlerts,
+  renderActivityRelatedWorks,
+} = activityUi;
+
 function setStatus(status) {
   els.syncStatus.className = "status-pill";
   if (status?.running || status?.latestRun?.status === "running") {
@@ -148,6 +173,88 @@ function setStatus(status) {
   els.syncButton.disabled = false;
 }
 
+function setActivityStatus(status) {
+  els.activityStatus.className = "status-pill";
+  if (status?.running || status?.latestRun?.status === "running") {
+    els.activityStatus.textContent = "刷新中";
+    els.activityStatus.classList.add("busy");
+    els.activitySyncButton.disabled = true;
+    return;
+  }
+  if (status?.latestRun?.status === "failed") {
+    els.activityStatus.textContent = "刷新失败";
+    els.activityStatus.classList.add("error");
+    els.activitySyncButton.disabled = false;
+    return;
+  }
+  els.activityStatus.textContent = "就绪";
+  els.activityStatus.classList.add("ok");
+  els.activitySyncButton.disabled = false;
+}
+
+function renderActivityAccount() {
+  const account = state.activities?.account ?? state.account ?? {};
+  const syncText = account.lastSyncedAt ? `账号同步 ${formatDate(account.lastSyncedAt)}` : "账号尚未同步";
+  const staleText = account.isStale ? " · 数据可能不是最新" : "";
+  els.activityAccount.textContent = account.hasSession
+    ? `当前点数 ${formatPrice(account.pointsJpy)} · ${syncText}${staleText}`
+    : "连接 DLsite 账号后，这里会显示你的点数摘要；活动领取条件仍以外部页面为准。";
+}
+
+function renderActivities() {
+  const payload = state.activities ?? {};
+  const items = payload.items ?? [];
+  const activeTotal = state.summary?.activeActivities ?? items.length;
+  renderActivityAccount();
+
+  const latest = state.activityStatus?.latestRun ?? payload.syncStatus?.latestRun;
+  if (state.activityStatus?.running || latest?.status === "running") {
+    els.activityCaption.textContent = "正在刷新 DLsite 活动，完成后会自动更新。";
+  } else if (latest?.status === "failed") {
+    els.activityCaption.textContent = `活动刷新失败：${latest.error || "未知错误"}`;
+  } else if (latest) {
+    els.activityCaption.textContent = `进行中 ${formatNumber(activeTotal)} 个 · 上次刷新 ${formatDate(latest.finishedAt || latest.startedAt)} · 未读 ${formatNumber(payload.unreadCount)}`;
+  } else {
+    els.activityCaption.textContent = "还没有活动快照，点击刷新活动后会显示。";
+  }
+
+  els.activityList.innerHTML = "";
+  if (!items.length) {
+    els.activityList.innerHTML = '<div class="empty">当前暂无进行中的活动。</div>';
+    return;
+  }
+
+  const visibleItems = items.slice(0, 3);
+  for (const item of visibleItems) {
+    const node = document.createElement("article");
+    node.className = "activity-card";
+    node.innerHTML = `
+      <a href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">
+        <img src="${escapeAttribute(item.imageUrl)}" alt="" loading="lazy" />
+      </a>
+      <div class="activity-card-body">
+        <a class="activity-title" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
+        <div class="muted-line">
+          <span class="badge discount">${escapeHtml(item.benefitLabel || "活动")}</span>
+          <span class="badge">${escapeHtml(formatTimeLeft(item.endsAt))}</span>
+        </div>
+        <p class="activity-summary">${escapeHtml(item.benefitSummary || "打开活动页查看详情。")}</p>
+        <p class="activity-summary">${escapeHtml(formatActivityWindow(item))}</p>
+        ${renderActivityRelatedWorks(item.relatedWorks)}
+        ${renderActivityAlerts(item.unreadAlerts)}
+      </div>
+    `;
+    els.activityList.append(node);
+  }
+
+  if (activeTotal > visibleItems.length) {
+    const more = document.createElement("div");
+    more.className = "activity-more";
+    more.innerHTML = `<a class="link-action" href="/activities.html">查看全部 ${formatNumber(activeTotal)} 个活动</a>`;
+    els.activityList.append(more);
+  }
+}
+
 function renderSummary() {
   const summary = state.summary ?? {};
   els.totalWorks.textContent = formatNumber(summary.totalWorks);
@@ -155,6 +262,8 @@ function renderSummary() {
   els.watchedWorks.textContent = formatNumber(summary.watchedWorks);
   els.unreadAlerts.textContent = formatNumber(summary.unreadAlerts);
   els.accountPoints.textContent = formatNumber(state.account?.pointsJpy);
+  els.activeActivities.textContent = formatNumber(summary.activeActivities);
+  els.unreadActivityAlerts.textContent = formatNumber(summary.unreadActivityAlerts);
 
   const latest = state.status?.latestRun ?? summary.latestRun;
   if (!latest) {
@@ -456,6 +565,8 @@ function closeHistory() {
 function renderAll() {
   renderSummary();
   setStatus(state.status);
+  setActivityStatus(state.activityStatus);
+  renderActivities();
   renderRankings();
   renderAlerts();
   renderAccount();
@@ -488,9 +599,11 @@ async function refreshAll() {
   state.refreshInFlight = true;
 
   try {
-  const [summary, status, ranking, alerts, watchlist, account, recommendations] = await Promise.all([
+  const [summary, status, activityStatus, activities, ranking, alerts, watchlist, account, recommendations] = await Promise.all([
     getJson("/api/dashboard/summary"),
     getJson("/api/sync/status"),
+    getJson("/api/activities/status"),
+    getJson("/api/activities?status=active&benefit=all&limit=3"),
     getJson(`/api/rankings?floor=${encodeURIComponent(state.floor)}&period=${encodeURIComponent(state.period)}&category=${encodeURIComponent(state.category)}`),
     getJson(`/api/alerts?status=${encodeURIComponent(state.alertsStatus)}`),
     getJson("/api/watchlist"),
@@ -499,6 +612,8 @@ async function refreshAll() {
   ]);
   state.summary = summary;
   state.status = status;
+  state.activityStatus = activityStatus;
+  state.activities = activities;
   state.ranking = ranking;
   state.alerts = alerts.items ?? [];
   state.watchlist = watchlist.items ?? [];
@@ -526,6 +641,20 @@ async function startSync() {
     state.status = { running: true, latestRun: payload.run };
     renderAll();
     toast(payload.alreadyRunning ? "同步已经在运行。" : "同步已启动。");
+    scheduleRefresh(0);
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function startActivitySync() {
+  try {
+    const payload = await sendJson("/api/sync/dlsite-activities", {
+      reason: "manual",
+    });
+    state.activityStatus = { running: true, latestRun: payload.run };
+    renderAll();
+    toast(payload.alreadyRunning ? "活动刷新已经在运行。" : "活动刷新已启动。");
     scheduleRefresh(0);
   } catch (error) {
     toast(error.message);
@@ -591,6 +720,15 @@ async function markAlertRead(id) {
   }
 }
 
+async function markActivityAlertRead(id) {
+  try {
+    await sendJson(`/api/activity-alerts/${encodeURIComponent(id)}/read`);
+    await refreshAll();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
 async function showHistory(productId) {
   try {
     renderHistory(await getJson(`/api/works/${encodeURIComponent(productId)}/history`));
@@ -607,10 +745,12 @@ function handleAction(event) {
   if (action === "watch") addOrUpdateWatch(id, button.dataset.price);
   if (action === "unwatch") removeWatch(id);
   if (action === "read-alert") markAlertRead(id);
+  if (action === "read-activity-alert") markActivityAlertRead(id);
   if (action === "history") showHistory(id);
 }
 
 els.syncButton.addEventListener("click", startSync);
+els.activitySyncButton.addEventListener("click", startActivitySync);
 els.categoryInput.addEventListener("change", async () => {
   state.category = els.categoryInput.value;
   await refreshAll();

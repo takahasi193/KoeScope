@@ -5,6 +5,7 @@ import {
   enrichRankingItems,
   fetchRankingItems,
 } from "./dlsiteRanking.js";
+import { fetchDlsiteActivities } from "./dlsiteActivities.js";
 import {
   importDlsiteAccountPages,
   normalizeDlsiteCookieHeader,
@@ -13,6 +14,7 @@ import {
 import { createMonitorRepository } from "./repository.js";
 
 const DAILY_SYNC_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_ACTIVITY_SYNC_MS = 6 * 60 * 60 * 1000;
 const DEFAULT_MONITOR_DELAY_MS = 1_500;
 
 function isoNow() {
@@ -48,10 +50,16 @@ export function createDlsiteMonitor({
   category,
   categories,
   minDelayMs = Number(process.env.DLSITE_MONITOR_DELAY_MS) || DEFAULT_MONITOR_DELAY_MS,
+  activitySyncIntervalMs =
+    Number(process.env.DLSITE_ACTIVITY_SYNC_INTERVAL_MS) || DEFAULT_ACTIVITY_SYNC_MS,
+  fetchActivities = fetchDlsiteActivities,
 } = {}) {
   let activeRunId = null;
   let activePromise = null;
   let scheduler = null;
+  let activeActivityRunId = null;
+  let activeActivityPromise = null;
+  let activityScheduler = null;
 
   function syncTargets(priority = null) {
     const selectedCategories = Array.isArray(categories) && categories.length
@@ -80,6 +88,17 @@ export function createDlsiteMonitor({
       return repository.updateSyncRun(latest.id, {
         status: "failed",
         error: latest.error || "同步被中断或服务已重启。",
+      });
+    }
+    return latest;
+  }
+
+  function getLatestRecoveringInterruptedActivityRun() {
+    const latest = repository.getLatestActivitySyncRun();
+    if (!activeActivityPromise && latest?.status === "running") {
+      return repository.updateActivitySyncRun(latest.id, {
+        status: "failed",
+        error: latest.error || "活动同步被中断或服务已重启。",
       });
     }
     return latest;
@@ -223,10 +242,73 @@ export function createDlsiteMonitor({
     };
   }
 
+  async function performActivitySync(runId) {
+    try {
+      repository.updateActivitySyncRun(runId, {
+        status: "running",
+        sourceCount: 0,
+        activityCount: 0,
+        error: "",
+      });
+
+      const capturedAt = isoNow();
+      const payload = await fetchActivities({ minDelayMs, includeDetails: true });
+      repository.saveActivities({
+        capturedAt,
+        entries: payload.items,
+      });
+      repository.updateActivitySyncRun(runId, {
+        status: "completed",
+        sourceCount: payload.sources?.length ?? 0,
+        activityCount: payload.items?.length ?? 0,
+        error: payload.errors?.length ? payload.errors.map((entry) => entry.error).join("; ") : "",
+      });
+    } catch (error) {
+      repository.updateActivitySyncRun(runId, {
+        status: "failed",
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+
+  function startActivitySync({ reason = "manual" } = {}) {
+    if (activeActivityPromise && activeActivityRunId) {
+      return {
+        alreadyRunning: true,
+        run: serializeRun(repository.getActivitySyncRun(activeActivityRunId)),
+      };
+    }
+
+    const run = repository.createActivitySyncRun({
+      scope: { reason, source: "dlsite-activities" },
+    });
+    activeActivityRunId = run.id;
+    activeActivityPromise = performActivitySync(run.id)
+      .catch((error) => {
+        console.error(error);
+      })
+      .finally(() => {
+        activeActivityRunId = null;
+        activeActivityPromise = null;
+      });
+
+    return {
+      alreadyRunning: false,
+      run: serializeRun(run),
+    };
+  }
+
   function nextScheduledAt() {
     const latest = getLatestRecoveringInterruptedRun();
     if (!latest) return isoNow();
     return addMs(latest.startedAt, DAILY_SYNC_MS);
+  }
+
+  function nextActivityScheduledAt() {
+    const latest = getLatestRecoveringInterruptedActivityRun();
+    if (!latest) return isoNow();
+    return addMs(latest.startedAt, activitySyncIntervalMs);
   }
 
   function isDue() {
@@ -236,19 +318,36 @@ export function createDlsiteMonitor({
     return Date.now() - new Date(latest.startedAt).getTime() >= DAILY_SYNC_MS;
   }
 
-  function startDailyScheduler() {
-    if (scheduler || process.env.DLSITE_MONITOR_AUTO_SYNC === "0") return;
+  function activityIsDue() {
+    const latest = getLatestRecoveringInterruptedActivityRun();
+    if (!latest) return true;
+    if (latest.status === "running") return false;
+    return Date.now() - new Date(latest.startedAt).getTime() >= activitySyncIntervalMs;
+  }
 
-    const check = () => {
-      if (!activePromise && isDue()) startSync({ reason: "scheduled" });
-    };
-    scheduler = setInterval(check, 60 * 60 * 1000);
-    setTimeout(check, 3_000);
+  function startDailyScheduler() {
+    if (!scheduler && process.env.DLSITE_MONITOR_AUTO_SYNC !== "0") {
+      const check = () => {
+        if (!activePromise && isDue()) startSync({ reason: "scheduled" });
+      };
+      scheduler = setInterval(check, 60 * 60 * 1000);
+      setTimeout(check, 3_000);
+    }
+
+    if (!activityScheduler && process.env.DLSITE_ACTIVITY_AUTO_SYNC !== "0") {
+      const checkActivities = () => {
+        if (!activeActivityPromise && activityIsDue()) startActivitySync({ reason: "scheduled" });
+      };
+      activityScheduler = setInterval(checkActivities, 60 * 60 * 1000);
+      setTimeout(checkActivities, 5_000);
+    }
   }
 
   function stopDailyScheduler() {
     clearInterval(scheduler);
     scheduler = null;
+    clearInterval(activityScheduler);
+    activityScheduler = null;
   }
 
   function getStatus() {
@@ -263,13 +362,37 @@ export function createDlsiteMonitor({
     };
   }
 
+  function getActivityStatus() {
+    const latestRun = activeActivityRunId
+      ? repository.getActivitySyncRun(activeActivityRunId)
+      : getLatestRecoveringInterruptedActivityRun();
+    return {
+      running: Boolean(activeActivityPromise),
+      activeRunId: activeActivityRunId,
+      latestRun: serializeRun(latestRun),
+      nextScheduledAt: nextActivityScheduledAt(),
+      intervalMs: activitySyncIntervalMs,
+    };
+  }
+
   return {
     repository,
     startSync,
+    startActivitySync,
     startDailyScheduler,
     stopDailyScheduler,
     getStatus,
+    getActivityStatus,
     getDashboardSummary: () => repository.getDashboardSummary(),
+    getActivityAlertSummary: (query) => ({
+      ...repository.getActivityAlertSummary(query),
+      syncStatus: getActivityStatus(),
+    }),
+    getActivities: (query) => ({
+      ...repository.getActivities(query),
+      syncStatus: getActivityStatus(),
+      account: repository.getAccountProfile(),
+    }),
     getRankings: (query) => repository.getRankings(query),
     getWorkHistory: (productId) => repository.getWorkHistory(productId),
     addWatchlist: (payload) => repository.addWatchlist(payload),
@@ -278,6 +401,7 @@ export function createDlsiteMonitor({
     getWatchlist: () => repository.getWatchlist(),
     getAlerts: (query) => repository.getAlerts(query),
     markAlertRead: (id) => repository.markAlertRead(id),
+    markActivityAlertRead: (id) => repository.markActivityAlertRead(id),
     getAccountProfile: (options) => repository.getAccountProfile(options),
     saveAccountSession: ({ cookieHeader, ...rest }) =>
       repository.saveAccountSession({

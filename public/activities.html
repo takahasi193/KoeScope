@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DLsite 活动中心</title>
+    <link rel="stylesheet" href="/dashboard.css" />
+  </head>
+  <body>
+    <header class="monitor-topbar">
+      <div>
+        <p class="eyebrow">DLsite activities</p>
+        <h1>活动中心</h1>
+      </div>
+      <nav class="top-actions" aria-label="页面操作">
+        <a class="link-action" href="/dashboard.html">返回 Monitor</a>
+        <a class="link-action" href="/">返回搜索</a>
+        <button class="primary-action" id="activitySyncButton" type="button">刷新活动</button>
+        <span class="status-pill" id="activityStatus">读取中</span>
+      </nav>
+    </header>
+
+    <main class="monitor-shell activity-center-shell">
+      <section class="metric-strip activity-center-metrics" aria-label="活动概览">
+        <div>
+          <span>当前结果</span>
+          <strong id="activityResultCount">0</strong>
+        </div>
+        <div>
+          <span>未读提醒</span>
+          <strong id="activityUnreadCount">0</strong>
+        </div>
+        <div>
+          <span>可能相关</span>
+          <strong id="activityMatchCount">0</strong>
+        </div>
+        <div>
+          <span>当前点数</span>
+          <strong id="activityPointCount">0</strong>
+        </div>
+      </section>
+
+      <section class="activity-center-controls" aria-label="活动筛选">
+        <div class="activity-filter-block">
+          <span>福利类型</span>
+          <div class="segmented-control" role="group" aria-label="福利类型">
+            <button data-benefit-filter="all" type="button" class="is-active">全部</button>
+            <button data-benefit-filter="point" type="button">点数</button>
+            <button data-benefit-filter="coupon" type="button">优惠券</button>
+            <button data-benefit-filter="discount" type="button">折扣</button>
+            <button data-benefit-filter="free" type="button">免费</button>
+            <button data-benefit-filter="bonus" type="button">福利</button>
+            <button data-benefit-filter="info" type="button">专题</button>
+          </div>
+        </div>
+        <div class="activity-filter-block">
+          <span>状态</span>
+          <div class="segmented-control" role="group" aria-label="活动状态">
+            <button data-status-filter="active" type="button" class="is-active">进行中</button>
+            <button data-status-filter="all" type="button">全部</button>
+            <button data-status-filter="endingSoon" type="button">即将结束</button>
+            <button data-status-filter="unread" type="button">未读提醒</button>
+          </div>
+        </div>
+        <label class="activity-search">
+          <span>搜索</span>
+          <input id="activitySearchInput" type="search" placeholder="活动标题或摘要" autocomplete="off" />
+        </label>
+        <label class="activity-related-toggle">
+          <input id="activityRelatedOnlyInput" type="checkbox" />
+          <span>只看与我相关</span>
+        </label>
+      </section>
+
+      <section class="activity-pane activity-center-pane">
+        <div class="section-head activity-head">
+          <div>
+            <h2>活动列表</h2>
+            <p id="activityCaption">正在读取活动。</p>
+          </div>
+          <span class="status-pill" id="activityFilterStatus">准备中</span>
+        </div>
+        <div class="activity-account" id="activityAccount"></div>
+        <div class="activity-personal" id="activityPersonal"></div>
+        <div class="activity-list activity-center-list" id="activityList"></div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" hidden></div>
+    <script src="/activityUi.js"></script>
+    <script src="/activities.js" type="module"></script>
+  </body>
+</html>

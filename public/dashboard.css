@@ -170,7 +170,7 @@ h3 {
 
 .metric-strip {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 1px;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -216,10 +216,464 @@ label span {
 }
 
 .ranking-pane,
+.activity-pane,
 .side-section {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-strong);
+}
+
+.activity-pane {
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.activity-head {
+  align-items: end;
+}
+
+.activity-account {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.activity-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-items: start;
+  background: var(--surface-strong);
+}
+
+.activity-more {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 18px;
+  background: var(--surface-muted);
+}
+
+.activity-card {
+  min-width: 0;
+  align-self: start;
+  display: grid;
+  grid-template-rows: auto auto;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-strong);
+}
+
+.activity-card > a {
+  display: block;
+  aspect-ratio: 25 / 8;
+  background: var(--surface-muted);
+}
+
+.activity-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.activity-card-body {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px 14px 14px;
+}
+
+.activity-title {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+.activity-title:hover {
+  color: var(--accent);
+}
+
+.activity-summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.activity-detail {
+  border: 1px solid rgba(27, 95, 255, 0.14);
+  border-radius: 7px;
+  background: rgba(27, 95, 255, 0.05);
+  overflow: hidden;
+}
+
+.activity-detail.failed,
+.activity-detail.fallback,
+.activity-detail.external,
+.activity-detail.skipped {
+  border-color: rgba(132, 92, 26, 0.18);
+  background: rgba(132, 92, 26, 0.06);
+}
+
+.activity-detail-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 9px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.activity-detail-head::-webkit-details-marker {
+  display: none;
+}
+
+.activity-detail-head::after {
+  content: "展开";
+  border: 1px solid rgba(27, 95, 255, 0.16);
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.activity-detail[open] .activity-detail-head::after {
+  content: "收起";
+}
+
+.activity-detail-head span {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.activity-detail-head strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-detail-head small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.activity-detail-body {
+  display: grid;
+  gap: 6px;
+  padding: 0 9px 9px;
+}
+
+.activity-detail p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.activity-detail-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.activity-detail-facts span {
+  min-width: 0;
+  border: 1px solid rgba(27, 95, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--ink);
+  padding: 3px 7px;
+  font-size: 11px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.activity-detail-facts strong {
+  margin-right: 4px;
+  color: var(--muted);
+}
+
+.activity-related {
+  overflow: hidden;
+  border: 1px solid rgba(8, 117, 111, 0.18);
+  border-radius: 7px;
+  background: rgba(8, 117, 111, 0.06);
+}
+
+.activity-related summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 9px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.activity-related summary::-webkit-details-marker {
+  display: none;
+}
+
+.activity-related summary::after {
+  content: "展开";
+  border: 1px solid rgba(8, 117, 111, 0.18);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.65);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.activity-related[open] summary::after {
+  content: "收起";
+}
+
+.activity-related summary span {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.activity-related summary strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(8, 117, 111, 0.12);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.activity-related summary small {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-related-body {
+  display: grid;
+  gap: 6px;
+  padding: 0 9px 9px;
+}
+
+.activity-related-work {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.activity-related-thumb {
+  width: 42px;
+  height: 42px;
+  border-radius: 7px;
+  object-fit: cover;
+  background: var(--surface-muted);
+}
+
+.activity-related-thumb.placeholder {
+  display: block;
+  border: 1px solid var(--line);
+}
+
+.activity-related-work span,
+.activity-related-work strong {
+  min-width: 0;
+}
+
+.activity-related-work strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.activity-related-work small,
+.activity-related p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.activity-related-work:hover strong {
+  color: var(--accent);
+}
+
+.activity-alerts {
+  display: grid;
+  gap: 6px;
+}
+
+.activity-alert {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(155, 98, 0, 0.24);
+  border-radius: 7px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  padding: 7px 8px;
+  font-size: 12px;
+}
+
+.activity-alert button {
+  min-height: 26px;
+  border: 1px solid rgba(155, 98, 0, 0.24);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.64);
+  color: var(--warn);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.activity-center-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.activity-center-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(220px, 0.7fr) auto;
+  gap: 14px;
+  align-items: end;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  padding: 14px;
+}
+
+.activity-filter-block {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.activity-filter-block > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.segmented-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.segmented-control button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-strong);
+  color: var(--muted);
+  padding: 0 11px;
+  font-size: 13px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.segmented-control button.is-active {
+  border-color: rgba(8, 117, 111, 0.28);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.activity-search {
+  min-width: 0;
+}
+
+.activity-related-toggle {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  padding: 0 12px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.activity-related-toggle input {
+  width: 16px;
+  min-height: 16px;
+}
+
+.activity-related-toggle span {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.activity-personal {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.activity-personal span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.activity-personal strong {
+  color: var(--accent);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.activity-center-list {
+  grid-template-columns: 1fr;
+}
+
+.activity-center-card {
+  grid-template-columns: minmax(210px, 30%) minmax(0, 1fr);
+  grid-template-rows: 1fr;
+}
+
+.activity-center-card > a {
+  height: 100%;
+  min-height: 156px;
+  aspect-ratio: auto;
+}
+
+.activity-center-card .activity-card-body {
+  padding: 14px 16px;
 }
 
 .section-head {
@@ -613,6 +1067,15 @@ textarea {
   .side-rail {
     grid-template-columns: 1fr 1fr;
   }
+
+  .activity-center-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .activity-search,
+  .activity-related-toggle {
+    grid-column: span 1;
+  }
 }
 
 @media (max-width: 680px) {
@@ -639,5 +1102,42 @@ textarea {
     border-bottom: 0;
     border-left: 0;
     border-radius: 8px 8px 0 0;
+  }
+
+  .top-actions,
+  .filters {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .top-actions > *,
+  .filters > * {
+    flex: 1 1 150px;
+  }
+
+  .activity-center-controls,
+  .activity-personal,
+  .activity-center-card {
+    grid-template-columns: 1fr;
+  }
+
+  .activity-center-card > a {
+    min-height: auto;
+    aspect-ratio: 25 / 8;
+  }
+
+  .activity-related-toggle {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .activity-detail-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .activity-detail-head strong,
+  .activity-detail-head small {
+    grid-column: 1 / -1;
+    white-space: normal;
   }
 }

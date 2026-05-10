@@ -1,3 +1,10 @@
+import {
+  activityReminderBadgeText,
+  activityReminderCopy,
+  normalizeActivityReminderSummary,
+  unavailableActivityReminderSummary,
+} from "./activityReminders.js";
+
 const DEFAULT_BACKEND = "http://localhost:5178";
 const HISTORY_LIMIT = 8;
 const ALIAS_RENDER_LIMIT = 20;
@@ -17,6 +24,7 @@ const state = {
   account: null,
   accountSyncStatus: null,
   accountSyncPollTimer: null,
+  activityReminder: unavailableActivityReminderSummary("loading"),
   searchJobId: null,
   searchPollTimer: null,
   searchRunToken: 0,
@@ -33,6 +41,12 @@ const els = {
   syncDlsiteAccountButton: document.querySelector("#syncDlsiteAccountButton"),
   deepSyncDlsiteAccountButton: document.querySelector("#deepSyncDlsiteAccountButton"),
   openDashboardButton: document.querySelector("#openDashboardButton"),
+  activityReminderPanel: document.querySelector("#activityReminderPanel"),
+  activityReminderStatus: document.querySelector("#activityReminderStatus"),
+  activityReminderCopy: document.querySelector("#activityReminderCopy"),
+  activityReminderList: document.querySelector("#activityReminderList"),
+  openActivityDashboardButton: document.querySelector("#openActivityDashboardButton"),
+  refreshActivityReminderButton: document.querySelector("#refreshActivityReminderButton"),
   keywordInput: document.querySelector("#keywordInput"),
   resolveButton: document.querySelector("#resolveButton"),
   searchButton: document.querySelector("#searchButton"),
@@ -190,7 +204,13 @@ async function saveBackend() {
   const storage = getChromeStorage();
   if (storage) await storage.set({ backendBase });
   toast("后端地址已保存。");
-  if (await checkHealth()) await loadAccountProfile();
+  if (await checkHealth()) {
+    await Promise.all([loadAccountProfile(), loadActivityReminders()]);
+  } else {
+    state.activityReminder = unavailableActivityReminderSummary("backend_unavailable");
+    renderActivityReminder();
+  }
+  await updateActivityReminderBadge();
 }
 
 async function savePopupSettings() {
@@ -291,7 +311,10 @@ function scheduleAccountSyncPoll(delayMs = 1000) {
 
 async function refreshAccountSyncStatus() {
   await loadAccountSyncStatus();
-  if (state.accountSyncStatus?.status === "completed") await loadAccountProfile();
+  if (state.accountSyncStatus?.status === "completed") {
+    await loadAccountProfile();
+    await updateActivityReminderBadge();
+  }
 }
 
 async function syncDlsiteAccount(mode = "quick") {
@@ -335,6 +358,59 @@ async function openDashboard() {
     return;
   }
   window.open(url, "_blank", "noreferrer");
+}
+
+async function openActivityDashboard() {
+  const url = `${state.backendBase}/dashboard.html#activities`;
+  if (globalThis.chrome?.tabs?.create) {
+    await globalThis.chrome.tabs.create({ url });
+    return;
+  }
+  window.open(url, "_blank", "noreferrer");
+}
+
+function renderActivityReminder() {
+  const copy = activityReminderCopy(state.activityReminder);
+  els.activityReminderStatus.textContent = copy.status;
+  els.activityReminderCopy.textContent = `${copy.title}。${copy.body}`;
+  els.openActivityDashboardButton.textContent = copy.actionLabel;
+  els.activityReminderPanel.classList.toggle("has-unread", copy.tone === "alert");
+  els.activityReminderPanel.classList.toggle("is-muted", copy.tone === "muted");
+  els.activityReminderList.innerHTML = "";
+  els.activityReminderList.hidden = !state.activityReminder?.hasUnread;
+
+  for (const item of state.activityReminder?.items ?? []) {
+    const article = document.createElement("article");
+    article.className = "activity-reminder-item";
+    const meta = [item.benefitLabel, item.endsAt ? `结束 ${formatDate(item.endsAt)}` : ""].filter(Boolean).join(" · ");
+    article.innerHTML = `
+      <div>${escapeHtml(item.message)}</div>
+      ${meta ? `<small>${escapeHtml(meta)}</small>` : ""}
+    `;
+    els.activityReminderList.append(article);
+  }
+}
+
+async function loadActivityReminders() {
+  try {
+    const payload = await getJson("/api/activity-alerts/summary?limit=3");
+    state.activityReminder = normalizeActivityReminderSummary(payload);
+  } catch (error) {
+    state.activityReminder = unavailableActivityReminderSummary("backend_unavailable", error.message);
+  }
+  renderActivityReminder();
+}
+
+async function updateActivityReminderBadge() {
+  if (!globalThis.chrome?.action?.setBadgeText) return;
+
+  const storageState = await readChromeStorage(["pendingKeyword", ACCOUNT_SYNC_STATUS_KEY]);
+  if (storageState.pendingKeyword) return;
+  if (storageState[ACCOUNT_SYNC_STATUS_KEY]?.status === "failed") return;
+
+  const text = activityReminderBadgeText(state.activityReminder);
+  await globalThis.chrome.action.setBadgeText({ text });
+  if (text) await globalThis.chrome.action.setBadgeBackgroundColor({ color: "#9b6200" });
 }
 
 function selectedPerson() {
@@ -816,6 +892,11 @@ els.openDlsiteLoginButton.addEventListener("click", openDlsiteLogin);
 els.syncDlsiteAccountButton.addEventListener("click", () => syncDlsiteAccount("quick"));
 els.deepSyncDlsiteAccountButton.addEventListener("click", () => syncDlsiteAccount("full"));
 els.openDashboardButton.addEventListener("click", openDashboard);
+els.openActivityDashboardButton.addEventListener("click", openActivityDashboard);
+els.refreshActivityReminderButton.addEventListener("click", async () => {
+  await loadActivityReminders();
+  await updateActivityReminderBadge();
+});
 els.resolveButton.addEventListener("click", resolvePersons);
 els.searchButton.addEventListener("click", searchDlsiteProgressive);
 els.keywordInput.addEventListener("keydown", (event) => {
@@ -837,5 +918,13 @@ renderHistory();
 renderCandidates();
 renderAliases();
 renderResults();
-if (await checkHealth()) await loadAccountProfile();
+renderActivityReminder();
+const backendHealthy = await checkHealth();
+if (backendHealthy) {
+  await Promise.all([loadAccountProfile(), loadActivityReminders()]);
+} else {
+  state.activityReminder = unavailableActivityReminderSummary("backend_unavailable");
+  renderActivityReminder();
+}
 await loadAccountSyncStatus();
+await updateActivityReminderBadge();

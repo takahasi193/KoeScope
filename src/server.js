@@ -82,6 +82,27 @@ function readAlertStatus(value) {
   return value === "all" ? "all" : "unread";
 }
 
+function readActivityStatus(value) {
+  return ["active", "all", "endingSoon", "unread"].includes(value) ? value : "active";
+}
+
+function readActivityBenefit(value) {
+  const allowedBenefits = new Set(["all", "point", "coupon", "discount", "free", "bonus", "info"]);
+  return allowedBenefits.has(value) ? value : "all";
+}
+
+function readActivityLimit(value) {
+  return Math.min(Math.max(Number(value) || 50, 1), 100);
+}
+
+function readActivitySearch(value) {
+  return normalizeSpace(value).slice(0, 120);
+}
+
+function readBooleanQuery(value) {
+  return value === "1" || value === "true" || value === "yes";
+}
+
 function readAccountMaxPages(value) {
   return Math.min(Math.max(Number(value) || 3, 1), 10);
 }
@@ -92,6 +113,10 @@ function readAccountSyncMode(value) {
 
 function readRecommendationLimit(value) {
   return Math.min(Math.max(Number(value) || 10, 1), 30);
+}
+
+function readActivityAlertSummaryLimit(value) {
+  return Math.min(Math.max(Number(value) || 3, 1), 10);
 }
 
 export function createApp({
@@ -183,8 +208,42 @@ export function createApp({
     res.json(monitor.getStatus());
   });
 
+  app.post(
+    "/api/sync/dlsite-activities",
+    asyncHandler(async (req, res) => {
+      const payload = monitor.startActivitySync({
+        reason: req.body?.reason || "manual",
+      });
+      res.status(payload.alreadyRunning ? 200 : 202).json(payload);
+    })
+  );
+
+  app.get("/api/activities/status", (_req, res) => {
+    res.json(monitor.getActivityStatus());
+  });
+
   app.get("/api/dashboard/summary", (_req, res) => {
     res.json(monitor.getDashboardSummary());
+  });
+
+  app.get("/api/activity-alerts/summary", (req, res) => {
+    res.json(
+      monitor.getActivityAlertSummary({
+        limit: readActivityAlertSummaryLimit(req.query.limit),
+      })
+    );
+  });
+
+  app.get("/api/activities", (req, res) => {
+    res.json(
+      monitor.getActivities({
+        status: readActivityStatus(req.query.status),
+        benefit: readActivityBenefit(req.query.benefit),
+        limit: readActivityLimit(req.query.limit),
+        search: readActivitySearch(req.query.search),
+        relatedOnly: readBooleanQuery(req.query.related),
+      })
+    );
   });
 
   app.get("/api/rankings", (req, res) => {
@@ -255,6 +314,11 @@ export function createApp({
 
   app.post("/api/alerts/:id/read", (req, res) => {
     const updated = monitor.markAlertRead(req.params.id);
+    res.json({ ok: true, updated });
+  });
+
+  app.post("/api/activity-alerts/:id/read", (req, res) => {
+    const updated = monitor.markActivityAlertRead(req.params.id);
     res.json({ ok: true, updated });
   });
 

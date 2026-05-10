@@ -13,7 +13,9 @@ function createElement(selector = "") {
           ? "home"
           : selector === "#periodInput"
             ? "week"
-            : "",
+            : selector === "#activityBenefitInput"
+              ? "all"
+              : "",
     checked: false,
     hidden: false,
     textContent: "",
@@ -83,9 +85,112 @@ function createDashboardHarness({ running = false } = {}) {
       requests.push({ path, options });
       let body = {};
       if (path === "/api/dashboard/summary") {
-        body = { totalWorks: 0, discountedWorks: 0, watchedWorks: 0, unreadAlerts: 0, notableDrops: [] };
+        body = {
+          totalWorks: 0,
+          discountedWorks: 0,
+          watchedWorks: 0,
+          unreadAlerts: 0,
+          activeActivities: 1,
+          unreadActivityAlerts: 1,
+          activityWorkMatches: 1,
+          activityMatchedWorks: 1,
+          activityMatchedActivities: 1,
+          activityFollowedWorks: 1,
+          notableDrops: [],
+        };
       } else if (path === "/api/sync/status") {
         body = status;
+      } else if (path === "/api/activities/status") {
+        body = {
+          running: false,
+          latestRun: { id: 2, status: "completed", finishedAt: "2026-05-09T00:00:00.000Z" },
+          nextScheduledAt: "2026-05-09T06:00:00.000Z",
+        };
+      } else if (path.startsWith("/api/activities")) {
+        body = {
+          generatedAt: "2026-05-10T00:00:00.000Z",
+          unreadCount: 1,
+          account: { hasSession: true, pointsJpy: 1200, lastSyncedAt: "2026-05-09T00:00:00.000Z", isStale: false },
+          personalSummary: {
+            syncState: "fresh",
+            account: {
+              hasSession: true,
+              pointsJpy: 1200,
+              lastSyncedAt: "2026-05-09T00:00:00.000Z",
+              isStale: false,
+            },
+            activeBenefitCounts: { coupon: 1, all: 1 },
+            highlights: [
+              { id: "points", label: "Current points", value: 1200, valueText: "1,200 pt", tone: "default" },
+              { id: "freshness", label: "Account sync", valueText: "Synced 2026-05-09T00:00:00.000Z", tone: "default" },
+            ],
+            entrypoints: [
+              {
+                benefit: "coupon",
+                count: 1,
+                label: "Coupon campaigns",
+                description: "Public coupon campaigns; verify coupon ownership and eligibility on DLsite.",
+                claimsEntitlement: false,
+              },
+            ],
+            relatedWorks: {
+              totalMatches: 1,
+              matchedWorks: 1,
+              matchedActivities: 1,
+              followedWorks: 1,
+              claimsEntitlement: false,
+              message: "发现 1 个可能相关的活动/作品匹配。",
+              disclaimer: "仅基于公开活动信息和本地/账号关注数据做保守匹配；优惠券领取、适用条件和最终价格请以 DLsite 页面为准。",
+            },
+            disclaimer: "Public activity entry; check DLsite for coupon ownership.",
+          },
+          items: [
+            {
+              activityId: "dlsite:1",
+              title: "30%OFFクーポン",
+              url: "https://www.dlsite.com/maniax/campaign/example",
+              imageUrl: "https://img.example/banner.jpg",
+              benefitType: "coupon",
+              benefitLabel: "优惠券",
+              benefitSummary: "可能提供优惠券。",
+              startsAt: "2026-05-09T00:00:00.000Z",
+              endsAt: "2026-05-11T00:00:00.000Z",
+              details: {
+                status: "parsed",
+                summary: "Parsed coupon detail summary.",
+                claimCondition: "Login before claiming.",
+                applicableScope: "Voice works.",
+                requiresLogin: true,
+                isLimited: false,
+                fetchedAt: "2026-05-10T00:00:00.000Z",
+              },
+              relatedWorks: [
+                {
+                  productId: "RJ100001",
+                  title: "Rain ASMR",
+                  url: "https://www.dlsite.com/maniax/work/=/product_id/RJ100001.html",
+                  imageUrl: "https://img.example/rain.jpg",
+                  sourceLabels: ["本地关注"],
+                  reasons: ["活动主题与作品分类同为音声/ASMR", "来自本地 watchlist"],
+                  claimsEntitlement: false,
+                },
+                {
+                  productId: "RJ01292821",
+                  title: "RJ01292821",
+                  circle: "JKギルティ",
+                  url: "https://www.dlsite.com/maniax/work/=/product_id/RJ01292821.html",
+                  imageUrl: "https://img.example/rj01292821.jpg",
+                  latestPriceJpy: 11,
+                  latestDiscountRate: 90,
+                  sourceLabels: ["DLsite 愿望单"],
+                  reasons: ["关注作品当前有折扣 90%OFF"],
+                  claimsEntitlement: false,
+                },
+              ],
+              unreadAlerts: [{ id: 1, message: "新活动：30%OFFクーポン" }],
+            },
+          ],
+        };
       } else if (path.startsWith("/api/rankings")) {
         body = { floor: "home", period: "week", category: "all", capturedAt: null, items: [] };
       } else if (path.startsWith("/api/alerts")) {
@@ -96,6 +201,8 @@ function createDashboardHarness({ running = false } = {}) {
         status.running = true;
         status.latestRun = { id: 1, status: "running", progress: { completedTargets: 0, totalTargets: 6 } };
         body = { alreadyRunning: false, run: status.latestRun };
+      } else if (path === "/api/sync/dlsite-activities" && options.method === "POST") {
+        body = { alreadyRunning: false, run: { id: 2, status: "running" } };
       }
       return {
         ok: true,
@@ -104,6 +211,7 @@ function createDashboardHarness({ running = false } = {}) {
     },
   });
 
+  vm.runInContext(fs.readFileSync("public/activityUi.js", "utf8"), context);
   vm.runInContext(fs.readFileSync("public/dashboard.js", "utf8"), context);
   return { context, elements, requests, timers };
 }
@@ -146,6 +254,35 @@ test("dashboard schedules an immediate preload after manual sync starts", async 
       period: "week",
     },
   });
+});
+
+test("dashboard loads activities and starts manual activity refresh", async () => {
+  const { context, elements, requests, timers } = createDashboardHarness({ running: false });
+  await flushAsyncWork();
+
+  assert.match(elements.get("#activityList").children[0].innerHTML, /30%OFFクーポン/);
+  assert.match(elements.get("#activityAccount").textContent, /1,200/);
+  assert.equal(elements.has("#activityPersonal"), false);
+  assert.match(elements.get("#activityList").children[0].innerHTML, /<details class="activity-related">/);
+  assert.match(elements.get("#activityList").children[0].innerHTML, /Rain ASMR/);
+  assert.match(elements.get("#activityList").children[0].innerHTML, /JKギルティ \/ RJ01292821/);
+  assert.match(elements.get("#activityList").children[0].innerHTML, /标题待同步/);
+  assert.match(elements.get("#activityList").children[0].innerHTML, /当前 11円/);
+  assert.match(elements.get("#activityList").children[0].innerHTML, /90%OFF/);
+  assert.match(elements.get("#activityList").children[0].innerHTML, /优惠券领取和适用条件/);
+  assert.doesNotMatch(elements.get("#activityList").children[0].innerHTML, /activity-detail/);
+  assert.match(elements.get("#activityCaption").textContent, /未读 1/);
+  assert.equal(
+    requests.some((request) => request.path === "/api/activities?status=active&benefit=all&limit=3"),
+    true
+  );
+
+  requests.length = 0;
+  await vm.runInContext("startActivitySync()", context);
+  await flushAsyncWork();
+
+  assert.equal(timers.at(-1).delay, 0);
+  assert.equal(requests.some((request) => request.path === "/api/sync/dlsite-activities"), true);
 });
 
 test("dashboard account sync directs users to the extension path", async () => {

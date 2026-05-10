@@ -372,3 +372,347 @@ test("repository preserves cached account lists during partial quick syncs", () 
     repo.close();
   }
 });
+
+test("repository stores activities, unread alerts, and active activity summaries", () => {
+  const repo = createMonitorRepository({ dbPath: tempDbPath() });
+  try {
+    const now = new Date();
+    const capturedAt = now.toISOString();
+    const startedAt = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+    const endingSoonAt = new Date(now.getTime() + 12 * 60 * 60 * 1000).toISOString();
+    const pastStartAt = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString();
+    const pastEndAt = new Date(now.getTime() - 9 * 24 * 60 * 60 * 1000).toISOString();
+
+    repo.saveActivities({
+      capturedAt,
+      entries: [
+        {
+          activityId: "dlsite:activity-new",
+          source: "campaign",
+          slot: "main",
+          title: "Point Present",
+          url: "https://www.dlsite.com/maniax/campaign/point",
+          imageUrl: "https://img.example/point.jpg",
+          benefitType: "point",
+          benefitLabel: "点数",
+          benefitSummary: "点数活动",
+          startsAt: startedAt,
+          endsAt: endingSoonAt,
+          raw: { banner_id: "activity-new" },
+        },
+        {
+          activityId: "dlsite:activity-ended",
+          source: "campaign",
+          slot: "main",
+          title: "Old Sale",
+          url: "https://www.dlsite.com/maniax/campaign/old",
+          imageUrl: "",
+          benefitType: "discount",
+          benefitLabel: "折扣",
+          benefitSummary: "旧活动",
+          startsAt: pastStartAt,
+          endsAt: pastEndAt,
+        },
+      ],
+    });
+    repo.saveAccountSession({ cookieHeader: "__DLsite_SID=test" });
+    repo.saveAccountSyncResult({ displayName: "tester", pointsJpy: 1500, lists: [] });
+
+    const active = repo.getActivities({ status: "active", benefit: "all" });
+    assert.deepEqual(
+      active.items.map((item) => item.activityId),
+      ["dlsite:activity-new"]
+    );
+    assert.equal(active.items[0].unreadAlerts.length, 2);
+    assert.equal(active.unreadCount, 3);
+    assert.equal(active.personalSummary.account.pointsJpy, 1500);
+    assert.equal(active.personalSummary.syncState, "fresh");
+    assert.equal(active.personalSummary.activeBenefitCounts.point, 1);
+    assert.equal(active.personalSummary.highlights.find((item) => item.id === "points").value, 1500);
+    assert.equal(active.personalSummary.highlights.find((item) => item.id === "freshness").tone, "default");
+    assert.deepEqual(
+      active.personalSummary.entrypoints.map((entry) => entry.benefit),
+      ["point"]
+    );
+    assert.equal(active.personalSummary.entrypoints[0].label, "Point campaigns");
+    assert.match(active.personalSummary.entrypoints[0].description, /current point balance/);
+    assert.equal(active.personalSummary.entrypoints[0].claimsEntitlement, false);
+    assert.equal(active.personalSummary.relatedWorks.emptyReason, "no_followed_works");
+
+    repo.saveActivities({
+      capturedAt: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
+      entries: [
+        {
+          activityId: "dlsite:activity-new",
+          source: "campaign",
+          slot: "main",
+          title: "Point Present",
+          url: "https://www.dlsite.com/maniax/campaign/point",
+          benefitType: "point",
+          benefitLabel: "点数",
+          benefitSummary: "点数活动",
+          endsAt: endingSoonAt,
+        },
+      ],
+    });
+    assert.equal(repo.getActivities({ status: "all" }).unreadCount, 3);
+
+    const alertId = active.items[0].unreadAlerts[0].id;
+    assert.equal(repo.markActivityAlertRead(alertId), true);
+    assert.equal(repo.getActivities({ status: "all" }).unreadCount, 2);
+
+    const pointOnly = repo.getActivities({ status: "all", benefit: "point" });
+    assert.deepEqual(
+      pointOnly.items.map((item) => item.activityId),
+      ["dlsite:activity-new"]
+    );
+    assert.deepEqual(
+      repo.getActivities({ status: "endingSoon" }).items.map((item) => item.activityId),
+      ["dlsite:activity-new"]
+    );
+    assert.deepEqual(
+      repo.getActivities({ status: "unread" }).items.map((item) => item.activityId).sort(),
+      ["dlsite:activity-ended", "dlsite:activity-new"]
+    );
+    assert.deepEqual(
+      repo.getActivities({ status: "all", search: "old sale" }).items.map((item) => item.activityId),
+      ["dlsite:activity-ended"]
+    );
+
+    const summary = repo.getDashboardSummary();
+    assert.equal(summary.activeActivities, 1);
+    assert.equal(summary.endingSoonActivities, 1);
+    assert.equal(summary.unreadActivityAlerts, 2);
+    assert.equal(summary.activityWorkMatches, 0);
+    assert.equal(summary.activityFollowedWorks, 0);
+
+    const activityAlertSummary = repo.getActivityAlertSummary({ limit: 2 });
+    assert.equal(activityAlertSummary.unreadCount, 2);
+    assert.equal(activityAlertSummary.typeCounts.new_activity, 2);
+    assert.equal(activityAlertSummary.typeCounts.ending_soon, 0);
+    assert.equal(activityAlertSummary.items.length, 2);
+    assert.equal(activityAlertSummary.items[0].activityTitle, "Old Sale");
+  } finally {
+    repo.close();
+  }
+});
+
+test("repository stores activity detail fields and preserves them on banner-only updates", () => {
+  const repo = createMonitorRepository({ dbPath: tempDbPath() });
+  try {
+    const capturedAt = "2026-05-10T00:00:00.000Z";
+    repo.saveActivities({
+      capturedAt,
+      entries: [
+        {
+          activityId: "dlsite:detail",
+          source: "campaign",
+          slot: "main",
+          title: "Detail Campaign",
+          url: "https://www.dlsite.com/maniax/campaign/detail",
+          benefitType: "coupon",
+          benefitLabel: "Coupon",
+          benefitSummary: "Banner summary",
+          details: {
+            status: "parsed",
+            summary: "Parsed public detail summary.",
+            claimCondition: "Login before claiming.",
+            applicableScope: "Voice and ASMR works.",
+            endsAt: "2026-05-31T14:59:59.000Z",
+            requiresLogin: true,
+            isLimited: true,
+            fetchedAt: "2026-05-10T00:00:01.000Z",
+            raw: { lineCount: 12 },
+          },
+        },
+      ],
+    });
+
+    const item = repo.getActivities({ status: "all" }).items[0];
+    assert.equal(item.details.status, "parsed");
+    assert.equal(item.details.claimCondition, "Login before claiming.");
+    assert.equal(item.details.applicableScope, "Voice and ASMR works.");
+    assert.equal(item.details.requiresLogin, true);
+    assert.equal(item.details.isLimited, true);
+    assert.equal(item.details.endsAt, "2026-05-31T14:59:59.000Z");
+    assert.equal(item.endsAt, "2026-05-31T14:59:59.000Z");
+    assert.equal(item.details.raw.lineCount, 12);
+
+    repo.saveActivities({
+      capturedAt: "2026-05-10T01:00:00.000Z",
+      entries: [
+        {
+          activityId: "dlsite:detail",
+          source: "campaign",
+          slot: "main",
+          title: "Detail Campaign Updated",
+          url: "https://www.dlsite.com/maniax/campaign/detail",
+          benefitType: "coupon",
+          benefitLabel: "Coupon",
+          benefitSummary: "Updated banner summary",
+        },
+      ],
+    });
+
+    const updated = repo.getActivities({ status: "all" }).items[0];
+    assert.equal(updated.title, "Detail Campaign Updated");
+    assert.equal(updated.details.claimCondition, "Login before claiming.");
+    assert.equal(updated.details.status, "parsed");
+  } finally {
+    repo.close();
+  }
+});
+
+test("repository matches followed works to coupon and discount activities conservatively", () => {
+  const repo = createMonitorRepository({ dbPath: tempDbPath() });
+  try {
+    const now = new Date();
+    const run = repo.createSyncRun({ scope: { reason: "test" }, totalTargets: 2 });
+    repo.saveSyncedProducts({
+      syncRunId: run.id,
+      capturedAt: now.toISOString(),
+      entries: [
+        sampleEntry({
+          productId: "RJ800001",
+          title: "Rain ASMR",
+          url: "https://www.dlsite.com/maniax/work/=/product_id/RJ800001.html",
+          floor: "maniax",
+          category: "voice",
+          categoryLabel: "ボイス・ASMR",
+          genres: ["ASMR", "バイノーラル"],
+          priceJpy: 1200,
+          officialPriceJpy: 2400,
+          discountRate: 50,
+        }),
+        sampleEntry({
+          productId: "RJ800002",
+          title: "Puzzle Game",
+          url: "https://www.dlsite.com/home/work/=/product_id/RJ800002.html",
+          floor: "home",
+          category: "game",
+          workType: "GAM",
+          categoryLabel: "ゲーム",
+          genres: ["RPG"],
+          priceJpy: 1800,
+          officialPriceJpy: 1800,
+          discountRate: 0,
+        }),
+      ],
+    });
+    repo.updateSyncRun(run.id, { status: "completed", fetchedRankings: 2, enrichedWorks: 2 });
+    repo.addWatchlist({ productId: "RJ800001", targetPriceJpy: 1000 });
+    repo.saveAccountSession({ cookieHeader: "__DLsite_SID=test" });
+    repo.saveAccountSyncResult({
+      displayName: "tester",
+      pointsJpy: 2000,
+      lists: [
+        {
+          type: "wishlist",
+          items: [
+            sampleEntry({
+              productId: "RJ800002",
+              title: "Puzzle Game",
+              category: "game",
+              workType: "GAM",
+              categoryLabel: "ゲーム",
+              genres: ["RPG"],
+              priceJpy: 1800,
+            }),
+          ],
+        },
+      ],
+    });
+
+    const startedAt = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+    const endsAt = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
+    repo.saveActivities({
+      capturedAt: now.toISOString(),
+      entries: [
+        {
+          activityId: "dlsite:coupon-asmr",
+          source: "campaign",
+          slot: "main",
+          title: "ASMR 30%OFF クーポン",
+          url: "https://www.dlsite.com/maniax/campaign/asmr-coupon",
+          benefitType: "coupon",
+          benefitLabel: "クーポン",
+          benefitSummary: "ASMR向けクーポン入口",
+          startsAt: startedAt,
+          endsAt,
+        },
+        {
+          activityId: "dlsite:discount-now",
+          source: "campaign",
+          slot: "main",
+          title: "割引キャンペーン",
+          url: "https://www.dlsite.com/maniax/campaign/discount",
+          benefitType: "discount",
+          benefitLabel: "割引",
+          benefitSummary: "割引作品の入口",
+          startsAt: startedAt,
+          endsAt,
+        },
+      ],
+    });
+
+    const payload = repo.getActivities({ status: "active", benefit: "all" });
+    const coupon = payload.items.find((item) => item.activityId === "dlsite:coupon-asmr");
+    const discount = payload.items.find((item) => item.activityId === "dlsite:discount-now");
+
+    assert.equal(coupon.relatedWorks[0].productId, "RJ800001");
+    assert.equal(coupon.relatedWorks[0].claimsEntitlement, false);
+    assert.equal(coupon.relatedWorks[0].sourceTypes.includes("watchlist"), true);
+    assert.match(coupon.relatedWorks[0].reasons.join(" "), /ASMR|watchlist/);
+    assert.equal(discount.relatedWorks.some((work) => work.productId === "RJ800001"), true);
+    assert.equal(payload.personalSummary.relatedWorks.totalMatches >= 2, true);
+    assert.equal(payload.personalSummary.relatedWorks.followedWorks, 2);
+    assert.equal(payload.personalSummary.relatedWorks.claimsEntitlement, false);
+    assert.deepEqual(
+      repo.getActivities({ status: "active", benefit: "all", relatedOnly: true }).items.map((item) => item.activityId),
+      ["dlsite:coupon-asmr", "dlsite:discount-now"]
+    );
+
+    const summary = repo.getDashboardSummary();
+    assert.equal(summary.activityWorkMatches >= 2, true);
+    assert.equal(summary.activityMatchedWorks >= 1, true);
+  } finally {
+    repo.close();
+  }
+});
+
+test("repository returns a friendly no-match activity summary", () => {
+  const repo = createMonitorRepository({ dbPath: tempDbPath() });
+  try {
+    const now = new Date();
+    const run = repo.createSyncRun({ scope: { reason: "test" }, totalTargets: 1 });
+    repo.saveSyncedProducts({
+      syncRunId: run.id,
+      capturedAt: now.toISOString(),
+      entries: [sampleEntry({ productId: "RJ810001", title: "Quiet Tool", genres: [], categoryLabel: "ツール" })],
+    });
+    repo.addWatchlist({ productId: "RJ810001" });
+    repo.saveActivities({
+      capturedAt: now.toISOString(),
+      entries: [
+        {
+          activityId: "dlsite:generic-coupon",
+          title: "全館クーポン",
+          url: "https://www.dlsite.com/home/campaign/generic-coupon",
+          benefitType: "coupon",
+          benefitLabel: "クーポン",
+          benefitSummary: "汎用キャンペーン",
+          startsAt: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+          endsAt: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+        },
+      ],
+    });
+
+    const payload = repo.getActivities({ status: "active", benefit: "all" });
+    assert.deepEqual(payload.items[0].relatedWorks, []);
+    assert.equal(payload.personalSummary.relatedWorks.totalMatches, 0);
+    assert.equal(payload.personalSummary.relatedWorks.emptyReason, "no_matches");
+    assert.match(payload.personalSummary.relatedWorks.message, /没有发现/);
+  } finally {
+    repo.close();
+  }
+});
