@@ -7,6 +7,7 @@ const state = {
   results: null,
   activeType: "all",
   activeAge: "all",
+  resultOrder: "dl_d",
   searchJobId: null,
   searchPollTimer: null,
   searchRunToken: 0,
@@ -20,7 +21,6 @@ const els = {
   maxAliasesInput: document.querySelector("#maxAliasesInput"),
   maxPagesInput: document.querySelector("#maxPagesInput"),
   perPageInput: document.querySelector("#perPageInput"),
-  orderInput: document.querySelector("#orderInput"),
   ageScopeInput: document.querySelector("#ageScopeInput"),
   verifyDetailsInput: document.querySelector("#verifyDetailsInput"),
   adultConfirm: document.querySelector("#adultConfirm"),
@@ -32,6 +32,7 @@ const els = {
   selectAllAliasesButton: document.querySelector("#selectAllAliasesButton"),
   clearAliasesButton: document.querySelector("#clearAliasesButton"),
   resultSummary: document.querySelector("#resultSummary"),
+  orderInput: document.querySelector("#orderInput"),
   categoryTabs: document.querySelector("#categoryTabs"),
   ageTabs: document.querySelector("#ageTabs"),
   resultList: document.querySelector("#resultList"),
@@ -72,8 +73,53 @@ function searchIsRunning() {
 function setBusy(isBusy, label = "") {
   els.resolveButton.disabled = isBusy;
   els.runButton.disabled = isBusy || !state.selectedPersonId || searchIsRunning();
+  els.orderInput?.querySelectorAll("button").forEach((button) => {
+    button.disabled = isBusy || searchIsRunning();
+  });
   document.body.classList.toggle("loading", isBusy);
   if (label) els.resultSummary.textContent = label;
+}
+
+function normalizeResultOrder(value) {
+  return value === "release_d" ? "release_d" : "dl_d";
+}
+
+function orderLabel(order = state.resultOrder) {
+  return order === "release_d" ? "最新" : "贩卖总数";
+}
+
+function currentResultOrder() {
+  return normalizeResultOrder(els.orderInput?.dataset.order || state.resultOrder);
+}
+
+function renderResultOrder() {
+  const order = currentResultOrder();
+  els.orderInput?.querySelectorAll("[data-order]").forEach((button) => {
+    const active = normalizeResultOrder(button.dataset.order) === order;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+    button.disabled = searchIsRunning();
+  });
+}
+
+function setResultOrder(order, { refresh = false } = {}) {
+  const normalized = normalizeResultOrder(order);
+  if (searchIsRunning()) {
+    toast("当前搜索仍在加载，完成后再切换排序。");
+    renderResultOrder();
+    return;
+  }
+
+  state.resultOrder = normalized;
+  if (els.orderInput) els.orderInput.dataset.order = normalized;
+  renderResultOrder();
+
+  if (refresh && state.results && selectedPerson()) {
+    runProgressiveDlsiteSearch();
+    return;
+  }
+
+  renderResults();
 }
 
 function clearSearchPolling() {
@@ -291,6 +337,7 @@ async function importResultToMonitor(item) {
 function renderResults() {
   const results = state.results;
   renderTabs();
+  renderResultOrder();
   els.resultList.innerHTML = "";
   els.runButton.disabled = !state.selectedPersonId || searchIsRunning();
 
@@ -312,14 +359,18 @@ function renderResults() {
     return;
   }
 
-  for (const item of visibleItems) {
+  for (const [index, item] of visibleItems.entries()) {
     const node = document.createElement("article");
     node.className = "result-item";
     node.innerHTML = `
-      <img class="result-image" src="${item.image || ""}" alt="" loading="lazy" />
+      <div class="result-media">
+        <span class="rank-badge">#${index + 1}</span>
+        <img class="result-image" src="${item.image || ""}" alt="" loading="lazy" />
+      </div>
       <div>
         <a class="result-title" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
         <div class="meta-line">
+          <span class="tag rank-mode">${escapeHtml(orderLabel(results.order))}</span>
           <span class="tag">${escapeHtml(item.typeLabel)}</span>
           ${ageBadge(item)}
           ${verificationBadge(item)}
@@ -407,6 +458,8 @@ async function pollProgressiveSearch(jobId, token) {
     if (token !== state.searchRunToken) return;
 
     state.results = payload;
+    state.resultOrder = normalizeResultOrder(payload.order ?? state.resultOrder);
+    if (els.orderInput) els.orderInput.dataset.order = state.resultOrder;
     renderResults();
 
     if (payload.progress?.isComplete) {
@@ -481,13 +534,15 @@ async function runProgressiveDlsiteSearch() {
       personId: person.id,
       aliases,
       scope,
-      order: els.orderInput.value || "release_d",
+      order: currentResultOrder(),
       verifyDetails: els.verifyDetailsInput.checked,
       maxAliases: Number(els.maxAliasesInput.value) || 12,
       maxPagesPerAlias: Number(els.maxPagesInput.value) || DEFAULT_MAX_PAGES,
       perPage: Number(els.perPageInput.value) || 100,
     });
     state.results = payload;
+    state.resultOrder = normalizeResultOrder(payload.order ?? currentResultOrder());
+    if (els.orderInput) els.orderInput.dataset.order = state.resultOrder;
     state.searchJobId = payload.progress?.jobId ?? null;
     state.activeType = "all";
     state.activeAge = "all";
@@ -505,11 +560,6 @@ async function runProgressiveDlsiteSearch() {
   } finally {
     setBusy(false);
   }
-}
-
-async function refreshSearchAfterOrderChange() {
-  if (!state.results || !selectedPerson()) return;
-  await runProgressiveDlsiteSearch();
 }
 
 function setAliasSelection(mode) {
@@ -574,7 +624,11 @@ els.keywordInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") resolvePersons();
 });
 els.maxAliasesInput.addEventListener("change", renderAliases);
-els.orderInput.addEventListener("change", refreshSearchAfterOrderChange);
+els.orderInput?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-order]");
+  if (!button) return;
+  setResultOrder(button.dataset.order, { refresh: true });
+});
 els.selectPenNamesButton.addEventListener("click", () => setAliasSelection("pen"));
 els.selectAllAliasesButton.addEventListener("click", () => setAliasSelection("all"));
 els.clearAliasesButton.addEventListener("click", () => setAliasSelection("none"));

@@ -212,7 +212,7 @@ select:focus {
 
 .settings-row {
   display: grid;
-  grid-template-columns: 120px 140px 120px 120px 120px 120px minmax(250px, 1fr);
+  grid-template-columns: 120px 140px 120px 120px 120px minmax(250px, 1fr);
   gap: 12px;
   align-items: end;
   margin-top: 14px;
@@ -369,6 +369,35 @@ select:focus {
   color: var(--muted);
 }
 
+.result-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-muted);
+}
+
+.result-sort button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.result-sort button.active {
+  background: var(--surface-strong);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(20, 40, 34, 0.08);
+}
+
 .tabs {
   display: flex;
   gap: 8px;
@@ -418,6 +447,30 @@ select:focus {
   height: 76px;
 }
 
+.result-media {
+  position: relative;
+  width: 76px;
+  height: 76px;
+}
+
+.rank-badge {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid rgba(8, 117, 111, 0.2);
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .result-title {
   display: inline-block;
   color: var(--ink);
@@ -449,6 +502,11 @@ select:focus {
   color: var(--ink);
   font-size: 12px;
   font-weight: 800;
+}
+
+.rank-mode {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .verify-status {
@@ -579,7 +637,8 @@ select:focus {
     justify-self: start;
   }
 
-  .result-image {
+  .result-image,
+  .result-media {
     width: 62px;
     height: 62px;
   }

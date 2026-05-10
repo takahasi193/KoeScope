@@ -47,13 +47,6 @@
             </select>
           </label>
           <label>
-            <span>排序</span>
-            <select id="orderInput">
-              <option value="release_d" selected>最新</option>
-              <option value="dl_d">贩卖总数</option>
-            </select>
-          </label>
-          <label>
             <span>年龄范围</span>
             <select id="ageScopeInput">
               <option value="all" selected>全部</option>
@@ -97,6 +90,10 @@
             <div>
               <h2>结果</h2>
               <p id="resultSummary">先解析人物，再选择别名搜索。</p>
+            </div>
+            <div class="result-sort" id="orderInput" role="group" aria-label="作品排序" data-order="dl_d">
+              <button class="active" data-order="dl_d" type="button">贩卖总数</button>
+              <button data-order="release_d" type="button">最新</button>
             </div>
           </div>
 
