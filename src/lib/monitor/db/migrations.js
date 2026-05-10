@@ -124,6 +124,60 @@ export function migrateMonitorDatabase(db) {
     CREATE INDEX IF NOT EXISTS idx_account_works_type
       ON account_works(list_type, synced_at DESC);
 
+    CREATE TABLE IF NOT EXISTS search_sessions (
+      id TEXT PRIMARY KEY,
+      person_id INTEGER,
+      keyword TEXT NOT NULL DEFAULT '',
+      person_name TEXT,
+      aliases_json TEXT NOT NULL DEFAULT '[]',
+      search_order TEXT NOT NULL DEFAULT 'dl_d',
+      scope TEXT NOT NULL DEFAULT 'all',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      status TEXT NOT NULL,
+      options_json TEXT NOT NULL DEFAULT '{}',
+      person_json TEXT NOT NULL DEFAULT '{}',
+      summary_json TEXT NOT NULL DEFAULT '{}',
+      raw_json TEXT NOT NULL DEFAULT '{}'
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_search_sessions_recent
+      ON search_sessions(updated_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_search_sessions_person_recent
+      ON search_sessions(person_id, updated_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_search_sessions_query_recent
+      ON search_sessions(search_order, scope, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS search_session_results (
+      search_session_id TEXT NOT NULL REFERENCES search_sessions(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      url TEXT NOT NULL,
+      image TEXT,
+      circle TEXT,
+      circle_url TEXT,
+      floor TEXT,
+      type TEXT,
+      age_category TEXT,
+      category TEXT,
+      price_jpy INTEGER,
+      sales INTEGER,
+      rating_count INTEGER,
+      matched_aliases_json TEXT NOT NULL DEFAULT '[]',
+      matched_pages_json TEXT NOT NULL DEFAULT '[]',
+      source_order INTEGER,
+      display_order INTEGER,
+      verification_json TEXT NOT NULL DEFAULT '{}',
+      raw_json TEXT NOT NULL DEFAULT '{}',
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY(search_session_id, product_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_search_session_results_session_order
+      ON search_session_results(search_session_id, display_order ASC, source_order ASC);
+
     CREATE TABLE IF NOT EXISTS activity_sync_runs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       status TEXT NOT NULL,

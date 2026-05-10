@@ -67,6 +67,14 @@ function createMockMonitor() {
   };
 }
 
+function createMockSearchHistory() {
+  return {
+    listSearches: () => ({ items: [] }),
+    getSearch: () => null,
+    getPersonSearches: () => ({ items: [] }),
+  };
+}
+
 async function withServer(app, callback) {
   const server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
@@ -79,7 +87,7 @@ async function withServer(app, callback) {
 }
 
 test("monitor routes expose sync, summary, rankings, and alerts", async () => {
-  const app = createApp({ monitor: createMockMonitor() });
+  const app = createApp({ monitor: createMockMonitor(), searchHistory: createMockSearchHistory() });
   await withServer(app, async (baseUrl) => {
     const sync = await fetch(`${baseUrl}/api/sync/dlsite-rankings`, { method: "POST" });
     assert.equal(sync.status, 202);

@@ -61,6 +61,8 @@ export function createSearchJobStore({
   ttlMs = DEFAULT_JOB_TTL_MS,
   concurrency = DEFAULT_SEARCH_CONCURRENCY,
   minDelayMs = DEFAULT_MIN_DELAY_MS,
+  searchHistoryRepository = null,
+  persistIntervalMs = 1500,
 } = {}) {
   const jobs = new Map();
 
@@ -104,6 +106,23 @@ export function createSearchJobStore({
     };
   }
 
+  function persist(job, { force = false } = {}) {
+    if (!searchHistoryRepository?.saveSearchSnapshot) return;
+    const now = Date.now();
+    if (!force && now - (job.lastPersistedAt ?? 0) < persistIntervalMs) return;
+
+    try {
+      searchHistoryRepository.saveSearchSnapshot(serialize(job), {
+        id: job.id,
+        createdAt: job.startedAt,
+        updatedAt: job.updatedAt,
+      });
+      job.lastPersistedAt = now;
+    } catch (error) {
+      console.error("Failed to persist search results:", error);
+    }
+  }
+
   function start(job) {
     void (async () => {
       try {
@@ -121,6 +140,7 @@ export function createSearchJobStore({
               ({ result: partialResult }) => {
                 job.aliasResults[index] = cloneAliasResult(partialResult);
                 job.updatedAt = Date.now();
+                persist(job);
               }
             );
             job.aliasResults[index] = result;
@@ -132,12 +152,14 @@ export function createSearchJobStore({
           } finally {
             job.completedAliases += 1;
             job.updatedAt = Date.now();
+            persist(job, { force: true });
           }
         });
 
         if (job.options.verifyDetails) {
           job.status = "verifying";
           job.updatedAt = Date.now();
+          persist(job, { force: true });
           const aggregated = aggregateDlsiteResults(job.aliasResults, { order: job.options.order });
           await verifyDlsiteItems(aggregated.items, job.selectedAliasValues, { minDelayMs });
           aggregated.ageGroups = summarizeAgeGroups(aggregated.items);
@@ -147,11 +169,13 @@ export function createSearchJobStore({
         job.status = "completed";
         job.completedAt = Date.now();
         job.updatedAt = job.completedAt;
+        persist(job, { force: true });
       } catch (error) {
         job.status = "failed";
         job.error = error.message;
         job.completedAt = Date.now();
         job.updatedAt = job.completedAt;
+        persist(job, { force: true });
         console.error(error);
       }
     })();
@@ -177,9 +201,11 @@ export function createSearchJobStore({
       aliasResults: selectedAliasValues.map((alias) => createPendingAliasResult(alias, options.order)),
       verifiedAggregated: null,
       error: "",
+      lastPersistedAt: 0,
     };
 
     jobs.set(id, job);
+    persist(job, { force: true });
     start(job);
     return serialize(job);
   }

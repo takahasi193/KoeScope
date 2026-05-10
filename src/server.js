@@ -11,6 +11,7 @@ import {
 import { normalizeSpace } from "./lib/cache.js";
 import { createDlsiteMonitor } from "./lib/monitor/service.js";
 import { createSearchJobStore } from "./lib/searchJobs.js";
+import { createSearchHistoryRepository } from "./lib/searchHistoryRepository.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -119,9 +120,48 @@ function readActivityAlertSummaryLimit(value) {
   return Math.min(Math.max(Number(value) || 3, 1), 10);
 }
 
+function readSearchHistoryLimit(value) {
+  return Math.min(Math.max(Number(value) || 20, 1), 100);
+}
+
+function readSearchHistoryAliases(value) {
+  const values = Array.isArray(value) ? value : [value];
+  return values
+    .flatMap((item) => String(item ?? "").split(","))
+    .map(normalizeSpace)
+    .filter(Boolean);
+}
+
+function readOptionalSearchOrder(value) {
+  return value ? normalizeSearchOrder(value) : "";
+}
+
+function readOptionalScope(value) {
+  return value ? readScope(value) : "";
+}
+
+function readPersonWorkSort(value) {
+  return value === "latest" ? "latest" : "hot";
+}
+
+function readPersonWorkType(value) {
+  const allowedTypes = new Set(["all", "voice", "game", "manga", "cg", "video", "other"]);
+  return allowedTypes.has(value) ? value : "all";
+}
+
+function readPersonWorkAge(value) {
+  const allowedAges = new Set(["all", "r18", "general", "r15", "unknown"]);
+  return allowedAges.has(value) ? value : "all";
+}
+
+function readPersonWorkLimit(value) {
+  return Math.min(Math.max(Number(value) || 100, 1), 300);
+}
+
 export function createApp({
   monitor = createDlsiteMonitor(),
-  searchJobStore = createSearchJobStore(),
+  searchHistory = createSearchHistoryRepository(),
+  searchJobStore = createSearchJobStore({ searchHistoryRepository: searchHistory }),
 } = {}) {
   const app = express();
 
@@ -189,6 +229,66 @@ export function createApp({
     asyncHandler(async (req, res) => {
       const payload = searchJobStore.get(req.params.id);
       if (!payload) return res.status(404).json({ error: "搜索任务不存在或已过期。" });
+      res.json(payload);
+    })
+  );
+
+  app.get("/api/search/history", (req, res) => {
+    res.json(
+      searchHistory.listSearches({
+        limit: readSearchHistoryLimit(req.query.limit),
+        personId: req.query.personId,
+        keyword: normalizeSpace(req.query.keyword),
+        aliases: readSearchHistoryAliases(req.query.aliases ?? req.query.alias),
+        order: readOptionalSearchOrder(req.query.order ?? req.query.sortOrder),
+        scope: readOptionalScope(req.query.scope),
+      })
+    );
+  });
+
+  app.get(
+    "/api/search/history/:id",
+    asyncHandler(async (req, res) => {
+      const payload = searchHistory.getSearch(req.params.id);
+      if (!payload) return res.status(404).json({ error: "Search history not found." });
+      res.json(payload);
+    })
+  );
+
+  app.get("/api/persons/:id/searches", (req, res) => {
+    res.json(
+      searchHistory.getPersonSearches(req.params.id, {
+        limit: readSearchHistoryLimit(req.query.limit),
+        keyword: normalizeSpace(req.query.keyword),
+        aliases: readSearchHistoryAliases(req.query.aliases ?? req.query.alias),
+        order: readOptionalSearchOrder(req.query.order ?? req.query.sortOrder),
+        scope: readOptionalScope(req.query.scope),
+      })
+    );
+  });
+
+  app.get(
+    "/api/persons/:id/profile",
+    asyncHandler(async (req, res) => {
+      const payload = searchHistory.getPersonProfile(req.params.id, {
+        recentLimit: readSearchHistoryLimit(req.query.limit),
+      });
+      if (!payload) return res.status(404).json({ error: "本地搜索历史中还没有这个人物。" });
+      res.json(payload);
+    })
+  );
+
+  app.get(
+    "/api/persons/:id/works",
+    asyncHandler(async (req, res) => {
+      const payload = searchHistory.getPersonWorks(req.params.id, {
+        sort: readPersonWorkSort(req.query.sort),
+        type: readPersonWorkType(req.query.type),
+        age: readPersonWorkAge(req.query.age),
+        sessionId: normalizeSpace(req.query.sessionId),
+        limit: readPersonWorkLimit(req.query.limit),
+      });
+      if (!payload) return res.status(404).json({ error: "本地搜索历史中还没有这个人物。" });
       res.json(payload);
     })
   );

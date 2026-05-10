@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>声优详情 - DL Voice Search</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/person.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Local search history</p>
+        <h1>声优详情</h1>
+      </div>
+      <div class="top-actions">
+        <a class="top-link" href="/">返回搜索</a>
+        <a class="top-link" href="/dashboard.html">打开 Monitor</a>
+        <div class="status-pill" id="serverStatus">连接中</div>
+      </div>
+    </header>
+
+    <main class="shell person-shell">
+      <section class="person-workspace">
+        <img id="personImage" class="person-avatar" alt="" />
+        <div class="person-title-block">
+          <p class="eyebrow" id="dataSource">数据来自本地搜索历史</p>
+          <h2 id="personName">加载中</h2>
+          <p id="personMeta">正在读取本地保存的搜索结果。</p>
+          <div class="person-alias-summary" id="aliasSummary"></div>
+        </div>
+        <div class="person-lookup">
+          <label>
+            <span>按名称打开</span>
+            <input id="keywordInput" type="search" placeholder="例如：青山ゆかり" autocomplete="off" />
+          </label>
+          <button class="secondary-action" id="keywordButton" type="button">查找</button>
+        </div>
+      </section>
+
+      <section class="person-layout">
+        <aside class="person-side">
+          <section class="side-panel">
+            <div class="panel-head">
+              <h2>别名</h2>
+              <span id="aliasCount">0</span>
+            </div>
+            <div class="alias-grid person-alias-list" id="aliasList"></div>
+          </section>
+
+          <section class="side-panel">
+            <div class="panel-head">
+              <h2>最近搜索</h2>
+              <span id="searchCount">0</span>
+            </div>
+            <div class="recent-list" id="recentList"></div>
+          </section>
+        </aside>
+
+        <section class="main-panel person-main">
+          <div class="stats-grid" id="statsGrid"></div>
+
+          <div class="result-head person-result-head">
+            <div>
+              <h2>作品库</h2>
+              <p id="workSummary">数据来自本地搜索历史，可切换最近搜索作为数据来源。</p>
+            </div>
+            <div class="result-sort" id="sortInput" role="group" aria-label="作品排序">
+              <button class="active" data-person-sort="hot" type="button">热门作品</button>
+              <button data-person-sort="latest" type="button">最新搜索</button>
+            </div>
+          </div>
+
+          <div class="person-filters">
+            <label>
+              <span>类型</span>
+              <select id="typeInput">
+                <option value="all">全部类型</option>
+                <option value="voice">音声/ASMR</option>
+                <option value="game">游戏</option>
+                <option value="manga">漫画</option>
+              </select>
+            </label>
+            <label>
+              <span>年龄</span>
+              <select id="ageInput">
+                <option value="all">全部年龄</option>
+                <option value="r18">R18</option>
+                <option value="general">全年龄</option>
+                <option value="r15">R15</option>
+                <option value="unknown">未知</option>
+              </select>
+            </label>
+            <div class="source-state">
+              <span id="activeSource">当前来源：全部本地搜索历史</span>
+              <button class="mini-action" id="clearSessionButton" type="button" hidden>使用全部历史</button>
+            </div>
+          </div>
+
+          <div class="result-list person-work-list" id="workList"></div>
+        </section>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" hidden></div>
+    <script src="/person.js" type="module"></script>
+  </body>
+</html>

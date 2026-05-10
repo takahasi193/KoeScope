@@ -159,8 +159,13 @@ function renderCandidates() {
         <strong>${escapeHtml(person.name)}</strong>
         <small>${escapeHtml(candidateSubtitle(person) || "Bangumi person #" + person.id)}</small>
       </span>
+      <span class="candidate-detail">详情</span>
     `;
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (event) => {
+      if (event.target.closest(".candidate-detail")) {
+        window.location.href = `/person.html?id=${encodeURIComponent(person.id)}`;
+        return;
+      }
       clearSearchPolling();
       state.selectedPersonId = person.id;
       state.results = null;
@@ -471,6 +476,17 @@ async function pollProgressiveSearch(jobId, token) {
     scheduleSearchPoll(1000);
   } catch (error) {
     if (token !== state.searchRunToken) return;
+    if (state.results?.progress?.jobId === jobId) {
+      state.results = {
+        ...state.results,
+        progress: {
+          ...state.results.progress,
+          status: "failed",
+          isComplete: true,
+          error: error.message,
+        },
+      };
+    }
     clearSearchPolling();
     renderResults();
     toast(error.message);
@@ -618,6 +634,34 @@ function readInitialKeyword() {
   return true;
 }
 
+async function restoreLatestSearchHistory() {
+  try {
+    const history = await getJson("/api/search/history?limit=1");
+    const latest = history.items?.[0];
+    if (!latest?.id) return;
+
+    const detail = await getJson(`/api/search/history/${encodeURIComponent(latest.id)}`);
+    const payload = detail.payload ?? detail;
+    if (!payload?.items) return;
+
+    state.results = payload;
+    state.keyword = payload.keyword ?? state.keyword;
+    state.resultOrder = normalizeResultOrder(payload.order ?? payload.options?.order ?? state.resultOrder);
+    if (els.orderInput) els.orderInput.dataset.order = state.resultOrder;
+    if (!els.keywordInput.value && payload.keyword) els.keywordInput.value = payload.keyword;
+    state.activeType = "all";
+    state.activeAge = "all";
+    renderResults();
+
+    if (payload.progress?.jobId && !payload.progress?.isComplete) {
+      state.searchJobId = payload.progress.jobId;
+      scheduleSearchPoll(700);
+    }
+  } catch (error) {
+    console.debug("No saved search history restored:", error);
+  }
+}
+
 els.resolveButton.addEventListener("click", resolvePersons);
 els.runButton.addEventListener("click", runProgressiveDlsiteSearch);
 els.keywordInput.addEventListener("keydown", (event) => {
@@ -638,5 +682,9 @@ renderCandidates();
 renderAliases();
 renderResults();
 checkHealth().then(() => {
-  if (hasInitialKeyword) resolvePersons();
+  if (hasInitialKeyword) {
+    resolvePersons();
+  } else {
+    restoreLatestSearchHistory();
+  }
 });

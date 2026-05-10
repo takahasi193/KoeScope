@@ -281,7 +281,7 @@ select:focus {
 
 .candidate {
   display: grid;
-  grid-template-columns: 46px 1fr;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
   gap: 12px;
   width: 100%;
   border: 0;
@@ -314,6 +314,19 @@ select:focus {
 .candidate small {
   color: var(--muted);
   line-height: 1.45;
+}
+
+.candidate-detail {
+  align-self: center;
+  min-height: 30px;
+  border: 1px solid rgba(8, 117, 111, 0.25);
+  border-radius: 7px;
+  background: var(--surface-strong);
+  color: var(--accent);
+  padding: 6px 9px;
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
 }
 
 .alias-tools {
