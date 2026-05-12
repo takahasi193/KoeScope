@@ -8,6 +8,7 @@ const state = {
   age: "all",
   sessionId: "",
   workById: new Map(),
+  subscription: null,
 };
 
 const els = {
@@ -31,12 +32,18 @@ const els = {
   ageInput: document.querySelector("#ageInput"),
   activeSource: document.querySelector("#activeSource"),
   clearSessionButton: document.querySelector("#clearSessionButton"),
+  subscriptionStatus: document.querySelector("#subscriptionStatus"),
+  subscriptionMeta: document.querySelector("#subscriptionMeta"),
+  subscribeButton: document.querySelector("#subscribeButton"),
+  checkSubscriptionButton: document.querySelector("#checkSubscriptionButton"),
+  unsubscribeButton: document.querySelector("#unsubscribeButton"),
   workList: document.querySelector("#workList"),
   toast: document.querySelector("#toast"),
 };
 
 function toast(message) {
-  els.toast.textContent = message;
+  const text = String(message ?? "").trim() || "\u64cd\u4f5c\u5df2\u5b8c\u6210\u3002";
+  els.toast.textContent = text;
   els.toast.hidden = false;
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => {
@@ -52,8 +59,12 @@ async function getJson(url) {
 }
 
 async function postJson(url, body) {
+  return sendJson(url, body, "POST");
+}
+
+async function sendJson(url, body = {}, method = "POST") {
   const response = await fetch(url, {
-    method: "POST",
+    method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -61,6 +72,12 @@ async function postJson(url, body) {
   if (!response.ok) throw new Error(payload.error || "请求失败");
   return payload;
 }
+
+const ANNOTATION_STATUS_LABELS = {
+  favorite: "神作",
+  owned: "已入",
+  planned: "待购",
+};
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -108,6 +125,8 @@ function renderEmpty(message) {
   els.statsGrid.innerHTML = "";
   els.workSummary.textContent = message;
   els.workList.innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
+  state.subscription = null;
+  renderSubscription();
 }
 
 function renderAliases() {
@@ -200,10 +219,52 @@ function renderProfile() {
     profile.stats.latestSearchAt
   )}`;
   if (person.name && !els.keywordInput.value) els.keywordInput.value = person.name;
+  state.subscription = profile.subscription ?? null;
 
   renderAliases();
   renderStats();
   renderRecentSearches();
+  renderSubscription();
+}
+
+function renderSubscription() {
+  const subscription = state.subscription;
+  if (!subscription) {
+    els.subscriptionStatus.textContent = "\u672a\u8ba2\u9605";
+    els.subscriptionMeta.textContent = "\u4fdd\u5b58\u8fd9\u4e2a\u58f0\u4f18\u540e\uff0cKoeScope \u4f1a\u4f4e\u9891\u68c0\u67e5\u53ef\u80fd\u7684\u65b0\u4f5c\u3002";
+    els.subscribeButton.textContent = "\u8ba2\u9605\u65b0\u4f5c";
+    els.checkSubscriptionButton.hidden = true;
+    els.unsubscribeButton.hidden = true;
+    return;
+  }
+
+  const statusLabel =
+    subscription.lastCheckStatus === "failed"
+      ? "\u5df2\u8ba2\u9605\u00b7\u4e0a\u6b21\u68c0\u67e5\u5931\u8d25"
+      : subscription.lastCheckStatus === "running"
+        ? "\u6b63\u5728\u68c0\u67e5"
+        : "\u5df2\u8ba2\u9605";
+  const metaParts = [
+    `${subscription.aliases?.length ?? 0} \u4e2a\u522b\u540d`,
+    subscription.lastCheckedAt
+      ? `\u4e0a\u6b21\u68c0\u67e5 ${formatDate(subscription.lastCheckedAt)}`
+      : "\u8fd8\u6ca1\u6709\u68c0\u67e5\u8bb0\u5f55",
+  ];
+  if (subscription.lastCheckStatus === "failed" && subscription.lastError) {
+    metaParts.push(subscription.lastError);
+  } else if (subscription.lastCheckedAt) {
+    metaParts.push(
+      subscription.lastNewItemCount > 0
+        ? `\u4e0a\u6b21\u65b0\u589e ${subscription.lastNewItemCount} \u6761\u63d0\u9192`
+        : "\u4e0a\u6b21\u672a\u53d1\u73b0\u65b0\u63d0\u9192"
+    );
+  }
+
+  els.subscriptionStatus.textContent = statusLabel;
+  els.subscriptionMeta.textContent = metaParts.join(" \u00b7 ");
+  els.subscribeButton.textContent = "\u66f4\u65b0\u8ba2\u9605";
+  els.checkSubscriptionButton.hidden = false;
+  els.unsubscribeButton.hidden = false;
 }
 
 function renderControls() {
@@ -225,6 +286,22 @@ function renderControls() {
 function workAgeBadge(item) {
   const status = item.ageCategory ?? "unknown";
   return `<span class="tag age-status ${escapeAttribute(status)}">${escapeHtml(item.ageLabel ?? "未知")}</span>`;
+}
+
+function renderAnnotationSummary(annotation) {
+  if (!annotation) return "";
+  const tags = Array.isArray(annotation.tags) ? annotation.tags : [];
+  const statusLabel = ANNOTATION_STATUS_LABELS[annotation.status] || "";
+  if (!statusLabel && tags.length === 0 && !annotation.note) return "";
+  return `
+    <div class="work-annotation">
+      <div class="meta-line">
+        ${statusLabel ? `<span class="tag annotation-status">${escapeHtml(statusLabel)}</span>` : ""}
+        ${tags.map((tag) => `<span class="tag annotation-tag">${escapeHtml(tag)}</span>`).join("")}
+      </div>
+      ${annotation.note ? `<p>${escapeHtml(annotation.note)}</p>` : ""}
+    </div>
+  `;
 }
 
 function renderWorks() {
@@ -271,10 +348,14 @@ function renderWorks() {
               <span>命中：${escapeHtml((item.matchedAliases ?? []).join(" / ") || "本地历史")}</span>
               <span>来源：${formatDate(item.searchUpdatedAt)}</span>
             </div>
+            ${renderAnnotationSummary(item.annotation)}
           </div>
           <div class="person-work-actions">
             <button class="result-watch" data-action="watch" data-product-id="${escapeAttribute(item.productId)}" type="button">
               ${item.isWatched ? "更新" : "监测"}
+            </button>
+            <button class="result-watch annotation-action" data-action="annotation" data-product-id="${escapeAttribute(item.productId)}" type="button">
+              标注
             </button>
             <a class="result-open" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">打开</a>
           </div>
@@ -312,6 +393,33 @@ async function loadPerson(personId = state.personId) {
     renderEmpty(error.message);
     toast(error.message);
   }
+}
+
+function subscriptionPayload() {
+  const person = state.profile?.person ?? {};
+  return {
+    personName: person.name || state.keyword || "",
+    personImage: person.image || "",
+    sourceUrl: person.sourceUrl || "",
+    keyword: state.keyword || person.name || "",
+    aliases: (state.profile?.aliases ?? []).map((alias) => alias.value),
+  };
+}
+
+function subscriptionSavedMessage(subscription, wasSubscribed) {
+  const action = wasSubscribed
+    ? "\u8ba2\u9605\u5df2\u66f4\u65b0"
+    : "\u58f0\u4f18\u8ba2\u9605\u5df2\u4fdd\u5b58";
+  const aliasCount = subscription?.aliases?.length ?? 0;
+  return aliasCount > 0
+    ? `${action}\uff1a${aliasCount} \u4e2a\u522b\u540d\u5c06\u7528\u4e8e\u65b0\u4f5c\u68c0\u67e5\u3002`
+    : `${action}\u3002`;
+}
+
+function setSubscriptionBusy(busy) {
+  els.subscribeButton.disabled = busy;
+  els.checkSubscriptionButton.disabled = busy;
+  els.unsubscribeButton.disabled = busy;
 }
 
 async function resolveKeyword() {
@@ -371,6 +479,89 @@ async function importWorkToMonitor(item) {
   await Promise.all([loadWorks(), loadPerson(state.personId)]);
 }
 
+async function editWorkAnnotation(item) {
+  const annotation = item.annotation ?? {};
+  const status = window.prompt("状态：favorite=神作, owned=已入, planned=待购，留空清除", annotation.status || "");
+  if (status === null) return;
+  const tags = window.prompt("标签（逗号分隔）", (annotation.tags ?? []).join(", "));
+  if (tags === null) return;
+  const note = window.prompt("本地备注", annotation.note || "");
+  if (note === null) return;
+
+  const saved = await sendJson(
+    `/api/works/${encodeURIComponent(item.productId)}/annotation`,
+    {
+      status,
+      tags: tags
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+      note,
+    },
+    "PUT"
+  );
+  item.annotation = saved;
+  toast("本地标注已保存。");
+  await loadWorks();
+}
+
+async function saveSubscription() {
+  if (!state.personId || !state.profile?.person?.name) {
+    toast("\u8bf7\u5148\u52a0\u8f7d\u58f0\u4f18\u6863\u6848\u3002");
+    return;
+  }
+
+  setSubscriptionBusy(true);
+  try {
+    const wasSubscribed = Boolean(state.subscription);
+    state.subscription = await sendJson(
+      `/api/persons/${encodeURIComponent(state.personId)}/subscription`,
+      subscriptionPayload(),
+      "PUT"
+    );
+    toast(subscriptionSavedMessage(state.subscription, wasSubscribed));
+    await loadPerson(state.personId);
+  } finally {
+    setSubscriptionBusy(false);
+  }
+}
+
+async function deleteSubscription() {
+  if (!state.personId || !state.subscription) return;
+
+  setSubscriptionBusy(true);
+  try {
+    await sendJson(`/api/persons/${encodeURIComponent(state.personId)}/subscription`, {}, "DELETE");
+    state.subscription = null;
+    toast("\u5df2\u53d6\u6d88\u8ba2\u9605\u3002");
+    await loadPerson(state.personId);
+  } finally {
+    setSubscriptionBusy(false);
+  }
+}
+
+async function checkSubscription() {
+  if (!state.personId || !state.subscription) return;
+
+  setSubscriptionBusy(true);
+  try {
+    const payload = await sendJson(
+      `/api/persons/${encodeURIComponent(state.personId)}/subscription/check`,
+      { reason: "manual" },
+      "POST"
+    );
+    state.subscription = payload.subscription ?? state.subscription;
+    toast(
+      payload.newAlertCount
+        ? `\u53d1\u73b0 ${payload.newAlertCount} \u6761\u65b0\u7684\u65b0\u4f5c\u63d0\u9192\u3002`
+        : "\u672c\u6b21\u68c0\u67e5\u6ca1\u6709\u65b0\u63d0\u9192\u3002"
+    );
+    await loadPerson(state.personId);
+  } finally {
+    setSubscriptionBusy(false);
+  }
+}
+
 async function setSort(sort) {
   state.sort = sort === "latest" ? "latest" : "hot";
   await loadWorks();
@@ -418,15 +609,24 @@ els.sortInput.addEventListener("click", (event) => {
 els.typeInput.addEventListener("change", () => setFilters().catch((error) => toast(error.message)));
 els.ageInput.addEventListener("change", () => setFilters().catch((error) => toast(error.message)));
 els.clearSessionButton.addEventListener("click", () => selectSession("").catch((error) => toast(error.message)));
+els.subscribeButton.addEventListener("click", () => saveSubscription().catch((error) => toast(error.message)));
+els.checkSubscriptionButton.addEventListener("click", () => checkSubscription().catch((error) => toast(error.message)));
+els.unsubscribeButton.addEventListener("click", () => deleteSubscription().catch((error) => toast(error.message)));
 els.recentList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-session-id]");
   if (button) selectSession(button.dataset.sessionId).catch((error) => toast(error.message));
 });
 els.workList.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-action='watch']");
+  const button = event.target.closest("button[data-action]");
   if (!button) return;
   const item = state.workById.get(button.dataset.productId);
-  if (item) importWorkToMonitor(item).catch((error) => toast(error.message));
+  if (!item) return;
+  if (button.dataset.action === "watch") {
+    importWorkToMonitor(item).catch((error) => toast(error.message));
+  }
+  if (button.dataset.action === "annotation") {
+    editWorkAnnotation(item).catch((error) => toast(error.message));
+  }
 });
 
 readInitialParams();
@@ -447,4 +647,7 @@ window.__personDetail = {
   resolveKeyword,
   setSort,
   selectSession,
+  saveSubscription,
+  checkSubscription,
+  deleteSubscription,
 };

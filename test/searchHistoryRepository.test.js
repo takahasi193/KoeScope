@@ -220,6 +220,46 @@ test("search history repository builds person profiles and filtered works", () =
         `
       )
       .run("RJ100001", 900, "watch", "2026-05-10T02:05:00.000Z", "2026-05-10T02:05:00.000Z");
+    repo.db
+      .prepare(
+        `
+          INSERT INTO work_annotations (product_id, note, tags_json, status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `
+      )
+      .run(
+        "RJ100001",
+        "local note",
+        JSON.stringify(["ASMR", "sale"]),
+        "planned",
+        "2026-05-10T02:06:00.000Z",
+        "2026-05-10T02:06:00.000Z"
+      );
+    repo.db
+      .prepare(
+        `
+          INSERT INTO person_subscriptions (
+            person_id, person_name, keyword, aliases_json, created_at, updated_at,
+            last_checked_at, last_successful_check_at, last_check_status, last_error,
+            last_result_count, last_new_item_count
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `
+      )
+      .run(
+        123,
+        "Aoyama Yukari",
+        "Aoyama Yukari",
+        JSON.stringify(["Aoyama Yukari", "Yukari"]),
+        "2026-05-10T02:07:00.000Z",
+        "2026-05-10T02:07:00.000Z",
+        "2026-05-10T03:00:00.000Z",
+        "2026-05-10T03:00:00.000Z",
+        "completed",
+        "",
+        2,
+        1
+      );
 
     const profile = repo.getPersonProfile(123);
     assert.equal(profile.person.name, "Aoyama Yukari");
@@ -230,10 +270,20 @@ test("search history repository builds person profiles and filtered works", () =
     assert.equal(profile.stats.searchSessions, 2);
     assert.equal(profile.aliases.find((alias) => alias.value === "Yukari").isPenName, true);
     assert.equal(profile.recentSearches[0].id, "search-2");
+    assert.equal(profile.subscription.personId, 123);
+    assert.equal(profile.subscription.lastNewItemCount, 1);
 
     const hot = repo.getPersonWorks(123, { sort: "hot" });
     assert.equal(hot.items[0].productId, "RJ100002");
     assert.equal(hot.items.find((item) => item.productId === "RJ100001").isWatched, true);
+    assert.deepEqual(hot.items.find((item) => item.productId === "RJ100001").annotation, {
+      productId: "RJ100001",
+      note: "local note",
+      tags: ["ASMR", "sale"],
+      status: "planned",
+      createdAt: "2026-05-10T02:06:00.000Z",
+      updatedAt: "2026-05-10T02:06:00.000Z",
+    });
 
     const filtered = repo.getPersonWorks(123, { sort: "latest", type: "voice", age: "general" });
     assert.equal(filtered.total, 1);
@@ -244,6 +294,7 @@ test("search history repository builds person profiles and filtered works", () =
       sessionWorks.items.map((item) => item.productId),
       ["RJ100001", "RJ100002"]
     );
+    assert.deepEqual(repo.getKnownPersonProductIds(123), ["RJ100001", "RJ100002"]);
   } finally {
     repo.close();
   }

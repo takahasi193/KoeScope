@@ -1,6 +1,18 @@
 export const ACCOUNT_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 export const PERSONAL_ACTIVITY_BENEFITS = ["point", "coupon", "discount"];
 export const ACTIVITY_WORK_MATCH_MIN_SCORE = 40;
+export const WORK_ANNOTATION_STATUSES = new Set(["", "favorite", "owned", "planned"]);
+export const PERSON_SUBSCRIPTION_CHECK_STATUSES = new Set(["idle", "running", "completed", "failed"]);
+export const WORK_ANNOTATION_STATUS_ALIASES = {
+  none: "",
+  unset: "",
+  favorite: "favorite",
+  owned: "owned",
+  planned: "planned",
+  "\u795e\u4f5c": "favorite",
+  "\u5df2\u5165": "owned",
+  "\u5f85\u8d2d": "planned",
+};
 export const PERSONAL_ACTIVITY_BENEFIT_COPY = {
   point: {
     label: "Point campaigns",
@@ -136,6 +148,125 @@ export function normalizeProductId(value) {
   return String(value ?? "").trim().toUpperCase();
 }
 
+function hasOwn(object, key) {
+  return Object.prototype.hasOwnProperty.call(object ?? {}, key);
+}
+
+export function normalizeAnnotationTags(value) {
+  const rawTags = Array.isArray(value)
+    ? value
+    : String(value ?? "")
+        .split(",")
+        .map((item) => item.trim());
+  const tags = [];
+  const seen = new Set();
+
+  for (const rawTag of rawTags) {
+    const tag = String(rawTag ?? "").trim().replace(/\s+/g, " ").slice(0, 32);
+    const key = tag.toLocaleLowerCase("ja-JP");
+    if (!tag || seen.has(key)) continue;
+    tags.push(tag);
+    seen.add(key);
+    if (tags.length >= 12) break;
+  }
+
+  return tags;
+}
+
+export function normalizePersonSubscriptionAliases(value, fallback = []) {
+  const rawAliases = Array.isArray(value) ? value : [value, ...fallback];
+  const aliases = [];
+  const seen = new Set();
+
+  for (const rawAlias of rawAliases) {
+    const parts = Array.isArray(rawAlias) ? rawAlias : String(rawAlias ?? "").split(",");
+    for (const part of parts) {
+      const alias = String(part ?? "").trim().replace(/\s+/g, " ").slice(0, 80);
+      const key = alias.toLocaleLowerCase("ja-JP");
+      if (!alias || seen.has(key)) continue;
+      aliases.push(alias);
+      seen.add(key);
+      if (aliases.length >= 20) return aliases;
+    }
+  }
+
+  return aliases;
+}
+
+export function normalizeWorkAnnotationInput(input = {}) {
+  const requestedStatus = String(input.status ?? "").trim();
+  const statusKey = requestedStatus.toLocaleLowerCase("en-US");
+  const status = WORK_ANNOTATION_STATUS_ALIASES[requestedStatus] ?? WORK_ANNOTATION_STATUS_ALIASES[statusKey] ?? statusKey;
+  if (!WORK_ANNOTATION_STATUSES.has(status)) {
+    const error = new Error("annotation status must be one of favorite, owned, planned, or empty.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return {
+    note: String(input.note ?? "").trim().slice(0, 1000),
+    tags: normalizeAnnotationTags(input.tags),
+    status,
+  };
+}
+
+export function normalizePersonSubscriptionInput(input = {}) {
+  const personId = toNullableInteger(input.personId);
+  if (personId === null) {
+    const error = new Error("personId is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const personName = String(input.personName ?? "").trim().slice(0, 120);
+  if (!personName) {
+    const error = new Error("personName is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const aliases = normalizePersonSubscriptionAliases(input.aliases, [personName]);
+  if (aliases.length === 0) aliases.push(personName);
+
+  return {
+    personId,
+    personName,
+    personImage: String(input.personImage ?? "").trim().slice(0, 500),
+    sourceUrl: String(input.sourceUrl ?? "").trim().slice(0, 500),
+    keyword: String(input.keyword ?? personName).trim().slice(0, 120) || personName,
+    aliases,
+  };
+}
+
+export function mapWorkAnnotation(row, productId = "") {
+  const tags = parseJson(row?.tags_json, []);
+  return {
+    productId: normalizeProductId(row?.product_id ?? productId),
+    note: row?.note || "",
+    tags: Array.isArray(tags) ? tags : [],
+    status: row?.status || "",
+    createdAt: row?.created_at || null,
+    updatedAt: row?.updated_at || null,
+  };
+}
+
+export function mapJoinedWorkAnnotation(row, productId = row?.product_id) {
+  if (!hasOwn(row, "annotation_status") && !hasOwn(row, "annotation_note") && !hasOwn(row, "annotation_tags_json")) {
+    return null;
+  }
+  return mapWorkAnnotation(
+    {
+      product_id: row.annotation_product_id || productId,
+      note: row.annotation_note || "",
+      tags_json: row.annotation_tags_json || "[]",
+      status: row.annotation_status || "",
+      created_at: row.annotation_created_at || null,
+      updated_at: row.annotation_updated_at || null,
+    },
+    productId
+  );
+}
+
 export function accountListLabel(type) {
   const labels = {
     wishlist: "DLsite 关注",
@@ -147,6 +278,7 @@ export function accountListLabel(type) {
 
 export function mapWorkRow(row) {
   if (!row) return null;
+  const annotation = mapJoinedWorkAnnotation(row);
   const latestPriceJpy = row.latest_price_jpy;
   const historicalLowPriceJpy = row.historical_low_price_jpy;
   const priceSnapshotCount = row.price_snapshot_count ?? 0;
@@ -157,7 +289,7 @@ export function mapWorkRow(row) {
         Number.isFinite(Number(historicalLowPriceJpy)) &&
         Number(priceSnapshotCount) > 1 &&
         Number(latestPriceJpy) <= Number(historicalLowPriceJpy);
-  return {
+  const mapped = {
     productId: row.product_id,
     title: row.title,
     url: row.url,
@@ -191,6 +323,8 @@ export function mapWorkRow(row) {
     isWatched: Boolean(row.is_watched),
     targetPriceJpy: row.target_price_jpy,
   };
+  if (annotation) mapped.annotation = annotation;
+  return mapped;
 }
 
 export function mapSyncRun(row) {
@@ -235,10 +369,36 @@ export function mapAlert(row) {
     title: row.title,
     imageUrl: row.image_url,
     circle: row.circle,
+    personId: toNullableInteger(row.person_id),
+    personName: row.person_name || "",
+    metadata: parseJson(row.metadata_json, {}),
     historicalLowPriceJpy,
     historicalLowCapturedAt: row.historical_low_captured_at,
     priceSnapshotCount,
     isHistoricalLow,
+  };
+}
+
+export function mapPersonSubscription(row) {
+  if (!row) return null;
+  const aliases = parseJson(row.aliases_json, []);
+  return {
+    personId: toNullableInteger(row.person_id),
+    personName: row.person_name || "",
+    personImage: row.person_image || "",
+    sourceUrl: row.source_url || "",
+    keyword: row.keyword || row.person_name || "",
+    aliases: Array.isArray(aliases) ? aliases : [],
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null,
+    lastCheckedAt: row.last_checked_at || null,
+    lastSuccessfulCheckAt: row.last_successful_check_at || null,
+    lastCheckStatus: PERSON_SUBSCRIPTION_CHECK_STATUSES.has(row.last_check_status)
+      ? row.last_check_status
+      : "idle",
+    lastError: row.last_error || "",
+    lastResultCount: Number(row.last_result_count) || 0,
+    lastNewItemCount: Number(row.last_new_item_count) || 0,
   };
 }
 
@@ -327,7 +487,8 @@ export function mapActivity(row, alerts = []) {
 
 export function mapWatchlist(row) {
   if (!row) return null;
-  return {
+  const annotation = mapJoinedWorkAnnotation(row);
+  const mapped = {
     productId: row.product_id,
     targetPriceJpy: row.target_price_jpy,
     note: row.note || "",
@@ -342,6 +503,8 @@ export function mapWatchlist(row) {
     latestDiscountRate: row.latest_discount_rate,
     source: row.source || "local",
   };
+  if (annotation) mapped.annotation = annotation;
+  return mapped;
 }
 
 export function mapFollowedActivityWork(row) {

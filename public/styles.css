@@ -1,26 +1,4 @@
-:root {
-  color-scheme: light;
-  --surface: #f5f8fb;
-  --surface-strong: #ffffff;
-  --surface-muted: #edf6fb;
-  --line: #d8e8f2;
-  --line-strong: #b7d7eb;
-  --ink: #15243a;
-  --muted: #637184;
-  --accent: #0095ff;
-  --accent-deep: #006bd6;
-  --accent-cyan: #00c8f6;
-  --accent-soft: #e4f6ff;
-  --accent-wash: #f2fbff;
-  --warn: #9f6800;
-  --warn-soft: #fff6dc;
-  --danger: #b42318;
-  --shadow: 0 16px 36px rgba(0, 83, 153, 0.08);
-  --shadow-soft: 0 8px 22px rgba(0, 91, 166, 0.06);
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    "Microsoft YaHei", sans-serif;
-}
+@import url("/theme.css");
 
 * {
   box-sizing: border-box;
@@ -30,7 +8,7 @@ body {
   min-width: 320px;
   margin: 0;
   background:
-    linear-gradient(180deg, rgba(8, 117, 111, 0.08), transparent 260px),
+    var(--body-gradient),
     var(--surface);
   color: var(--ink);
 }
@@ -106,7 +84,7 @@ h2 {
 
 .top-link {
   min-height: 38px;
-  border: 1px solid rgba(8, 117, 111, 0.25);
+  border: 1px solid var(--accent-border);
   border-radius: 7px;
   background: var(--accent-soft);
   color: var(--accent);
@@ -119,14 +97,14 @@ h2 {
 }
 
 .status-pill.ok {
-  border-color: rgba(8, 117, 111, 0.28);
+  border-color: var(--accent-border-strong);
   background: var(--accent-soft);
   color: var(--accent);
 }
 
 .status-pill.error {
-  border-color: rgba(180, 35, 24, 0.3);
-  background: #fff1ef;
+  border-color: var(--danger);
+  background: var(--danger-soft);
   color: var(--danger);
 }
 
@@ -140,7 +118,7 @@ h2 {
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--surface-panel);
   box-shadow: var(--shadow);
 }
 
@@ -180,8 +158,8 @@ select {
 
 input:focus,
 select:focus {
-  border-color: rgba(8, 117, 111, 0.72);
-  box-shadow: 0 0 0 3px rgba(8, 117, 111, 0.12);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .primary-action,
@@ -197,11 +175,11 @@ select:focus {
 
 .primary-action {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 .secondary-action {
-  border-color: rgba(8, 117, 111, 0.25);
+  border-color: var(--accent-border);
   background: var(--accent-soft);
   color: var(--accent);
 }
@@ -259,7 +237,7 @@ select:focus {
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--surface-panel);
 }
 
 .panel-head,
@@ -324,7 +302,7 @@ select:focus {
 .candidate-detail {
   align-self: center;
   min-height: 30px;
-  border: 1px solid rgba(8, 117, 111, 0.25);
+  border: 1px solid var(--accent-border);
   border-radius: 7px;
   background: var(--surface-strong);
   color: var(--accent);
@@ -363,7 +341,7 @@ select:focus {
 }
 
 .alias-chip.pen {
-  border-color: rgba(8, 117, 111, 0.3);
+  border-color: var(--accent-border-strong);
   background: var(--accent-soft);
 }
 
@@ -426,7 +404,7 @@ select:focus {
 
 .age-tabs {
   padding-top: 0;
-  background: rgba(237, 242, 240, 0.45);
+  background: var(--accent-wash);
 }
 
 .tab {
@@ -441,9 +419,9 @@ select:focus {
 }
 
 .tab.active {
-  border-color: rgba(8, 117, 111, 0.34);
+  border-color: var(--accent-border-strong);
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 .result-list {
@@ -481,10 +459,10 @@ select:focus {
   min-width: 34px;
   height: 24px;
   padding: 0 7px;
-  border: 1px solid rgba(8, 117, 111, 0.2);
+  border: 1px solid var(--accent-border);
   border-radius: 999px;
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   font-size: 12px;
   font-weight: 900;
 }
@@ -542,22 +520,22 @@ select:focus {
 }
 
 .verify-status.not_matched {
-  background: #fff1ef;
+  background: var(--danger-soft);
   color: var(--danger);
 }
 
 .age-status.general {
-  background: #eef8f1;
-  color: #257345;
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .age-status.r15 {
-  background: #fff7dd;
-  color: #9b6200;
+  background: var(--warn-soft);
+  color: var(--warn);
 }
 
 .age-status.r18 {
-  background: #fff1ef;
+  background: var(--danger-soft);
   color: var(--danger);
 }
 
@@ -576,7 +554,7 @@ select:focus {
 .result-open,
 .result-watch {
   min-height: 36px;
-  border: 1px solid rgba(8, 117, 111, 0.3);
+  border: 1px solid var(--accent-border-strong);
   border-radius: 7px;
   background: var(--accent-soft);
   color: var(--accent);
@@ -607,7 +585,7 @@ select:focus {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--ink);
-  color: #fff;
+  color: var(--toast-text);
   box-shadow: var(--shadow);
 }
 
@@ -621,7 +599,7 @@ select:focus {
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(8, 117, 111, 0.12), transparent);
+  background: var(--divider-gradient);
   animation: sweep 1.1s infinite;
 }
 
@@ -677,7 +655,7 @@ select:focus {
 
 body {
   background:
-    linear-gradient(180deg, #eefaff 0, #ffffff 280px, var(--surface) 920px),
+    var(--body-alt-gradient),
     var(--surface);
 }
 
@@ -686,8 +664,8 @@ body {
   top: 0;
   z-index: 8;
   padding: 18px clamp(18px, 4vw, 52px);
-  border-bottom: 1px solid rgba(0, 149, 255, 0.16);
-  background: rgba(255, 255, 255, 0.9);
+  border-bottom: 1px solid var(--accent-border);
+  background: var(--surface-glass);
   backdrop-filter: blur(14px);
 }
 
@@ -761,7 +739,7 @@ h2 {
   margin-left: 2px;
   border-radius: 999px;
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   font-size: 18px;
   line-height: 1;
   transform: translateX(0);
@@ -769,7 +747,7 @@ h2 {
 }
 
 .primary-action::after {
-  background: #fff;
+  background: var(--surface-strong);
   color: var(--accent);
 }
 
@@ -791,22 +769,22 @@ h2 {
 
 .top-link {
   min-height: 42px;
-  border-color: rgba(0, 149, 255, 0.2);
-  background: #fff;
+  border-color: var(--accent-border);
+  background: var(--surface-strong);
   color: var(--accent-deep);
   box-shadow: none;
 }
 
 .status-pill {
   min-height: 42px;
-  border-color: rgba(0, 149, 255, 0.18);
+  border-color: var(--accent-border);
   background: var(--accent-wash);
   color: var(--muted);
   font-weight: 850;
 }
 
 .status-pill.ok {
-  border-color: rgba(0, 149, 255, 0.28);
+  border-color: var(--accent-border-strong);
   background: var(--accent-soft);
   color: var(--accent-deep);
 }
@@ -816,9 +794,9 @@ h2 {
 .main-panel {
   position: relative;
   overflow: hidden;
-  border-color: rgba(0, 149, 255, 0.16);
+  border-color: var(--accent-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--surface-raised);
   box-shadow: none;
 }
 
@@ -859,15 +837,15 @@ label {
 input,
 select {
   min-height: 46px;
-  border-color: rgba(23, 55, 87, 0.14);
+  border-color: var(--line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface-strong);
 }
 
 input:focus,
 select:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 4px rgba(0, 149, 255, 0.12);
+  box-shadow: 0 0 0 4px var(--accent-border);
 }
 
 .primary-action,
@@ -884,15 +862,15 @@ select:focus {
 .secondary-action,
 .candidate-detail,
 .result-open {
-  border-color: rgba(0, 149, 255, 0.2);
+  border-color: var(--accent-border);
   background: var(--accent-soft);
   color: var(--accent-deep);
 }
 
 .mini-action {
-  border-color: rgba(0, 149, 255, 0.16);
+  border-color: var(--accent-border);
   border-radius: 999px;
-  background: #fff;
+  background: var(--surface-strong);
   color: var(--accent-deep);
   transition:
     transform 160ms ease,
@@ -901,7 +879,7 @@ select:focus {
 }
 
 .mini-action:hover {
-  border-color: rgba(0, 149, 255, 0.32);
+  border-color: var(--accent-border-strong);
   background: var(--accent-wash);
   transform: translateY(-2px);
 }
@@ -919,11 +897,11 @@ select:focus {
 }
 
 .check-control {
-  border-color: rgba(0, 149, 255, 0.14);
+  border-color: var(--accent-border);
 }
 
 .legal-check {
-  border-color: rgba(159, 104, 0, 0.2);
+  border-color: var(--warn-border);
 }
 
 .layout {
@@ -934,7 +912,7 @@ select:focus {
 .panel-head,
 .result-head {
   padding: 16px 18px;
-  border-bottom-color: rgba(0, 149, 255, 0.14);
+  border-bottom-color: var(--accent-border);
 }
 
 .panel-head span {
@@ -951,7 +929,7 @@ select:focus {
 .candidate {
   grid-template-columns: 58px minmax(0, 1fr) auto;
   padding: 14px 16px;
-  border-bottom-color: rgba(0, 149, 255, 0.12);
+  border-bottom-color: var(--accent-border);
   transition:
     transform 160ms ease,
     background 160ms ease;
@@ -1001,9 +979,9 @@ select:focus {
 }
 
 .alias-chip {
-  border-color: rgba(23, 55, 87, 0.12);
+  border-color: var(--line);
   border-radius: 999px;
-  background: #fff;
+  background: var(--surface-strong);
   transition:
     transform 160ms ease,
     border-color 160ms ease,
@@ -1011,20 +989,20 @@ select:focus {
 }
 
 .alias-chip:hover {
-  border-color: rgba(0, 149, 255, 0.24);
+  border-color: var(--accent-border-strong);
   background: var(--accent-wash);
   transform: translateY(-2px);
 }
 
 .alias-chip.pen {
-  border-color: rgba(0, 149, 255, 0.28);
+  border-color: var(--accent-border-strong);
   background: var(--accent-soft);
   color: var(--accent-deep);
 }
 
 .result-head {
   align-items: end;
-  background: linear-gradient(90deg, #fff, var(--accent-wash));
+  background: linear-gradient(90deg, var(--surface-strong), var(--accent-wash));
 }
 
 .result-head p {
@@ -1034,9 +1012,9 @@ select:focus {
 }
 
 .result-sort {
-  border-color: rgba(0, 149, 255, 0.16);
+  border-color: var(--accent-border);
   border-radius: 999px;
-  background: #fff;
+  background: var(--surface-strong);
 }
 
 .result-sort button {
@@ -1045,17 +1023,17 @@ select:focus {
 
 .result-sort button.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   box-shadow: none;
 }
 
 .tabs {
   gap: 9px;
-  border-bottom-color: rgba(0, 149, 255, 0.12);
+  border-bottom-color: var(--accent-border);
 }
 
 .tab {
-  border-color: rgba(23, 55, 87, 0.12);
+  border-color: var(--line);
   transition:
     transform 160ms ease,
     border-color 160ms ease,
@@ -1063,7 +1041,7 @@ select:focus {
 }
 
 .tab:hover {
-  border-color: rgba(0, 149, 255, 0.32);
+  border-color: var(--accent-border-strong);
   transform: translateY(-2px);
 }
 
@@ -1073,14 +1051,14 @@ select:focus {
 }
 
 .result-list {
-  background: #fff;
+  background: var(--surface-strong);
 }
 
 .result-item {
   grid-template-columns: 92px minmax(0, 1fr) auto;
   gap: 18px;
   padding: 16px 18px;
-  border-bottom-color: rgba(0, 149, 255, 0.12);
+  border-bottom-color: var(--accent-border);
   transition:
     transform 160ms ease,
     background 160ms ease;
@@ -1103,17 +1081,17 @@ select:focus {
 }
 
 .result-image {
-  border: 1px solid rgba(0, 149, 255, 0.12);
+  border: 1px solid var(--accent-border);
   border-radius: 8px;
-  box-shadow: 0 10px 22px rgba(21, 36, 58, 0.06);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.06);
 }
 
 .rank-badge {
   top: -8px;
   left: -8px;
-  border-color: #fff;
+  border-color: var(--text-on-accent);
   background: var(--accent);
-  box-shadow: 0 6px 14px rgba(0, 149, 255, 0.24);
+  box-shadow: 0 6px 14px var(--accent-border-strong);
 }
 
 .result-title {
@@ -1130,33 +1108,33 @@ select:focus {
   display: inline-flex;
   align-items: center;
   min-height: 24px;
-  border-left: 1px solid rgba(0, 149, 255, 0.16);
+  border-left: 1px solid var(--accent-border);
   padding-left: 8px;
 }
 
 .tag {
-  border: 1px solid rgba(23, 55, 87, 0.08);
-  background: #f4f8fb;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
   color: var(--ink);
 }
 
 .rank-mode,
 .verify-status.matched {
-  border-color: rgba(0, 149, 255, 0.18);
+  border-color: var(--accent-border);
   background: var(--accent-soft);
   color: var(--accent-deep);
 }
 
 .age-status.general {
-  background: #e9f8f0;
+  background: var(--success-soft);
 }
 
 .age-status.r15 {
-  background: #fff6dc;
+  background: var(--warn-soft);
 }
 
 .age-status.r18 {
-  background: #fff0f0;
+  background: var(--danger-soft);
 }
 
 .result-actions {
@@ -1169,8 +1147,8 @@ select:focus {
 }
 
 .result-watch {
-  border-color: rgba(23, 55, 87, 0.12);
-  background: #fff;
+  border-color: var(--line);
+  background: var(--surface-strong);
   transition:
     transform 160ms ease,
     background 160ms ease,
@@ -1178,7 +1156,7 @@ select:focus {
 }
 
 .result-watch:hover {
-  border-color: rgba(0, 149, 255, 0.3);
+  border-color: var(--accent-border-strong);
   background: var(--accent-wash);
   transform: translateY(-2px);
 }
@@ -1188,8 +1166,8 @@ select:focus {
 }
 
 .toast {
-  border-color: rgba(0, 149, 255, 0.18);
-  background: #11243b;
+  border-color: var(--accent-border);
+  background: var(--toast-bg);
   box-shadow: var(--shadow);
 }
 

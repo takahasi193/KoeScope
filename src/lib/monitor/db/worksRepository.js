@@ -117,6 +117,9 @@ export function createWorksRepository({ db, statements }) {
         ...alert,
         createdAt: capturedAt,
         sourceRunId: syncRunId,
+        personId: null,
+        personName: "",
+        metadataJson: "{}",
         fingerprint: alertFingerprint(productId, alert),
       });
     }
@@ -144,7 +147,23 @@ export function createWorksRepository({ db, statements }) {
 
   function getWorkHistory(productId) {
     const normalized = normalizeProductId(productId);
-    const work = mapWorkRow(db.prepare("SELECT * FROM works WHERE product_id = ?").get(normalized));
+    const work = mapWorkRow(
+      db
+        .prepare(
+          `SELECT w.*,
+                  wa.product_id AS annotation_product_id,
+                  wa.note AS annotation_note,
+                  wa.tags_json AS annotation_tags_json,
+                  wa.status AS annotation_status,
+                  wa.created_at AS annotation_created_at,
+                  wa.updated_at AS annotation_updated_at
+           FROM works w
+           LEFT JOIN work_annotations wa
+             ON wa.product_id = w.product_id
+           WHERE w.product_id = ?`
+        )
+        .get(normalized)
+    );
     if (!work) return null;
     const prices = db
       .prepare(
@@ -189,7 +208,7 @@ export function createWorksRepository({ db, statements }) {
          FROM lowest`
       )
       .get(normalized);
-    return { work, prices, ranks, priceSummary };
+    return { work, annotation: work.annotation, prices, ranks, priceSummary };
   }
 
   function getNotablePriceDrops(limit = 8) {

@@ -19,7 +19,7 @@ export function createAlertsRepository({ db, statements }) {
                      FROM price_snapshots ps
                     WHERE ps.product_id = a.product_id
                       AND ps.price_jpy IS NOT NULL) AS price_snapshot_count
-           FROM alerts a JOIN works w ON w.product_id = a.product_id
+           FROM alerts a LEFT JOIN works w ON w.product_id = a.product_id
            ORDER BY a.created_at DESC LIMIT ?`
         : `SELECT a.*, w.title, w.image_url, w.circle,
                   (SELECT MIN(ps.price_jpy)
@@ -36,7 +36,7 @@ export function createAlertsRepository({ db, statements }) {
                      FROM price_snapshots ps
                     WHERE ps.product_id = a.product_id
                       AND ps.price_jpy IS NOT NULL) AS price_snapshot_count
-           FROM alerts a JOIN works w ON w.product_id = a.product_id
+           FROM alerts a LEFT JOIN works w ON w.product_id = a.product_id
            WHERE a.status = 'unread'
            ORDER BY a.created_at DESC LIMIT ?`;
     return db.prepare(sql).all(limit).map(mapAlert);

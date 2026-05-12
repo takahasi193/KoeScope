@@ -6,6 +6,7 @@
     <title>声优详情 - KoeScope</title>
     <link rel="icon" href="/assets/koescope-icon-32.png" type="image/png" />
     <link rel="apple-touch-icon" href="/assets/koescope-icon-256.png" />
+    <script src="/theme.js"></script>
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/person.css" />
   </head>
@@ -19,6 +20,7 @@
       <div class="top-actions">
         <a class="top-link" href="/">返回搜索</a>
         <a class="top-link" href="/dashboard.html">打开 Monitor</a>
+        <button class="theme-toggle" data-theme-toggle type="button" aria-pressed="false">Dark</button>
         <div class="status-pill" id="serverStatus">连接中</div>
       </div>
     </header>
@@ -39,6 +41,18 @@
           </label>
           <button class="secondary-action" id="keywordButton" type="button">查找</button>
         </div>
+        <section class="person-subscription-box">
+          <div>
+            <p class="eyebrow">Monitor 04 / Subscription</p>
+            <strong id="subscriptionStatus">Not subscribed</strong>
+            <p id="subscriptionMeta">Save this voice actor for low-frequency possible-new-work checks.</p>
+          </div>
+          <div class="mini-actions">
+            <button class="mini-button primary" id="subscribeButton" type="button">Subscribe</button>
+            <button class="mini-button" id="checkSubscriptionButton" type="button" hidden>Check now</button>
+            <button class="mini-button" id="unsubscribeButton" type="button" hidden>Unsubscribe</button>
+          </div>
+        </section>
       </section>
 
       <section class="person-layout">
@@ -105,7 +119,7 @@
       </section>
     </main>
 
-    <div class="toast" id="toast" hidden></div>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
     <script src="/person.js" type="module"></script>
   </body>
 </html>

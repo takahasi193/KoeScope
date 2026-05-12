@@ -106,6 +106,16 @@
       return title || productId || "未命名作品";
     }
 
+    function imageSource(item) {
+      return item?.cachedImageUrl || item?.imageUrl || "";
+    }
+
+    function imageFallbackAttribute(item) {
+      const primary = item?.cachedImageUrl || "";
+      const fallback = item?.imageUrl || item?.remoteImageUrl || "";
+      return primary && fallback && primary !== fallback ? ` data-fallback-src="${escapeAttribute(fallback)}"` : "";
+    }
+
     function renderRelatedWorkMeta(work) {
       const parts = [];
       const productId = String(work?.productId || "").trim();
@@ -135,17 +145,18 @@
           </summary>
           <div class="activity-related-body">
             ${works
-              .map(
-                (work) => `
+              .map((work) => {
+                const src = imageSource(work);
+                return `
                   <a class="activity-related-work" href="${escapeAttribute(work.url)}" target="_blank" rel="noreferrer">
-                    ${work.imageUrl ? `<img class="activity-related-thumb" src="${escapeAttribute(work.imageUrl)}" alt="" loading="lazy" />` : '<span class="activity-related-thumb placeholder" aria-hidden="true"></span>'}
+                    ${src ? `<img class="activity-related-thumb" src="${escapeAttribute(src)}"${imageFallbackAttribute(work)} alt="" loading="lazy" />` : '<span class="activity-related-thumb placeholder" aria-hidden="true"></span>'}
                     <span>
                       <strong>${escapeHtml(relatedWorkTitle(work))}</strong>
                       <small>${escapeHtml(renderRelatedWorkMeta(work))}</small>
                     </span>
                   </a>
-                `
-              )
+                `;
+              })
               .join("")}
             <p>仅表示可能相关，优惠券领取和适用条件请在 DLsite 确认。</p>
           </div>

@@ -72,6 +72,11 @@ function createPersonHarness() {
     "ageInput",
     "activeSource",
     "clearSessionButton",
+    "subscriptionStatus",
+    "subscriptionMeta",
+    "subscribeButton",
+    "checkSubscriptionButton",
+    "unsubscribeButton",
     "workList",
     "toast",
   ];
@@ -119,6 +124,15 @@ function createPersonHarness() {
         status: "completed",
       },
     ],
+    subscription: {
+      personId: 123,
+      personName: "Aoyama Yukari",
+      aliases: ["Aoyama Yukari", "Yukari"],
+      lastCheckStatus: "completed",
+      lastCheckedAt: "2026-05-10T03:00:00.000Z",
+      lastError: "",
+      lastNewItemCount: 1,
+    },
     dataSource: { kind: "local_search_history" },
   };
 
@@ -150,6 +164,12 @@ function createPersonHarness() {
           matchedAliases: ["Yukari"],
           searchUpdatedAt: "2026-05-10T02:00:00.000Z",
           isWatched: true,
+          annotation: {
+            productId: "RJ100001",
+            status: "planned",
+            tags: ["ASMR", "sale"],
+            note: "local note",
+          },
         },
         {
           productId: "RJ100002",
@@ -192,10 +212,24 @@ function createPersonHarness() {
       history: { replaceState() {} },
       prompt: () => "",
     },
-    fetch: async (path) => {
+    fetch: async (path, options = {}) => {
       requests.push(String(path));
       if (path === "/api/health") return { ok: true, json: async () => ({ ok: true }) };
       if (path === "/api/persons/123/profile") return { ok: true, json: async () => profile };
+      if (path === "/api/persons/123/subscription" && options.method === "PUT") {
+        const body = JSON.parse(options.body || "{}");
+        profile.subscription = {
+          ...profile.subscription,
+          personId: 123,
+          personName: body.personName,
+          aliases: body.aliases,
+          keyword: body.keyword,
+          lastCheckStatus: "completed",
+          lastCheckedAt: "2026-05-10T03:00:00.000Z",
+          lastNewItemCount: 1,
+        };
+        return { ok: true, json: async () => profile.subscription };
+      }
       if (String(path).startsWith("/api/persons/123/works")) {
         return { ok: true, json: async () => worksFor(path) };
       }
@@ -227,6 +261,11 @@ test("person detail page renders persisted profile and switches work sources", a
   assert.match(elements.get("#aliasList").innerHTML, /马甲/);
   assert.match(elements.get("#workList").innerHTML, /Rain ASMR/);
   assert.match(elements.get("#workList").innerHTML, /已关注/);
+  assert.match(elements.get("#workList").innerHTML, /待购/);
+  assert.match(elements.get("#workList").innerHTML, /local note/);
+  assert.match(elements.get("#workList").innerHTML, /data-action="annotation"/);
+  assert.equal(elements.get("#subscriptionStatus").textContent, "已订阅");
+  assert.match(elements.get("#subscriptionMeta").textContent, /新增 1 条提醒/);
   assert.ok(requests.some((path) => path.includes("/api/persons/123/works?sort=hot")));
 
   await vm.runInContext("window.__personDetail.setSort('latest')", context);
@@ -235,4 +274,16 @@ test("person detail page renders persisted profile and switches work sources", a
   await vm.runInContext("window.__personDetail.selectSession('search-1')", context);
   assert.match(elements.get("#activeSource").textContent, /单次搜索/);
   assert.ok(requests.some((path) => path.includes("sessionId=search-1")));
+});
+
+test("person detail subscription update shows an informative toast", async () => {
+  const { context, elements } = createPersonHarness();
+  vm.runInContext(fs.readFileSync("public/person.js", "utf8"), context);
+
+  await waitFor(() => context.window.__personDetail.state.works);
+  await vm.runInContext("window.__personDetail.saveSubscription()", context);
+
+  assert.equal(elements.get("#toast").hidden, false);
+  assert.match(elements.get("#toast").textContent, /\u8ba2\u9605\u5df2\u66f4\u65b0/);
+  assert.match(elements.get("#toast").textContent, /2 \u4e2a\u522b\u540d/);
 });

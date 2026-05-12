@@ -198,17 +198,7 @@ export function createAccountRepository({ db, statements }) {
     return getAccountProfile();
   }
 
-  function getAffordableRecommendations({ budgetJpy = null, limit = 10, excludeCollection = true } = {}) {
-    const account = getAccountProfile();
-    const budget = toNonNegativeInteger(budgetJpy ?? account.pointsJpy);
-    if (!budget) {
-      return {
-        budgetJpy: budget,
-        items: [],
-        algorithm: "popular-first-affordable-value",
-      };
-    }
-
+  function getAffordableRecommendationCandidates({ budget, excludeCollection = true } = {}) {
     const rows = db
       .prepare(
         `WITH latest_rankings AS (
@@ -269,7 +259,7 @@ export function createAccountRepository({ db, statements }) {
       byProduct.set(productId, base);
     }
 
-    const scored = [...byProduct.values()]
+    return [...byProduct.values()]
       .map((item) => scoreRecommendation(item, budget))
       .filter((item) => {
         const popularEnough = item.popularityScore >= 20;
@@ -279,7 +269,28 @@ export function createAccountRepository({ db, statements }) {
           item.latestPriceJpy <= Math.floor(budget * 0.85);
         return popularEnough && valueEnough;
       })
-      .sort((a, b) => b.recommendationScore - a.recommendationScore || a.bestRank - b.bestRank)
+      .sort((a, b) => b.recommendationScore - a.recommendationScore || a.bestRank - b.bestRank);
+  }
+
+  function getRecommendationBudget(budgetJpy) {
+    const account = getAccountProfile();
+    return {
+      account,
+      budget: toNonNegativeInteger(budgetJpy ?? account.pointsJpy),
+    };
+  }
+
+  function getAffordableRecommendations({ budgetJpy = null, limit = 10, excludeCollection = true } = {}) {
+    const { budget } = getRecommendationBudget(budgetJpy);
+    if (!budget) {
+      return {
+        budgetJpy: budget,
+        items: [],
+        algorithm: "popular-first-affordable-value",
+      };
+    }
+
+    const scored = getAffordableRecommendationCandidates({ budget, excludeCollection })
       .slice(0, Math.min(Math.max(Number(limit) || 10, 1), 30))
       .map((item) => ({
         ...item,
@@ -293,6 +304,124 @@ export function createAccountRepository({ db, statements }) {
     };
   }
 
+  function compactBundleWork(item) {
+    return {
+      productId: item.productId,
+      title: item.title,
+      url: item.url,
+      imageUrl: item.imageUrl,
+      circle: item.circle,
+      circleId: item.circleId,
+      latestPriceJpy: item.latestPriceJpy,
+      latestOfficialPriceJpy: item.latestOfficialPriceJpy,
+      latestDiscountRate: item.latestDiscountRate,
+      recommendationScore: item.recommendationScore,
+      reasons: recommendationReason(item),
+    };
+  }
+
+  function summarizeBundle({ circleKey, circle, items, budget }) {
+    const totalPriceJpy = items.reduce((total, item) => total + (item.latestPriceJpy ?? 0), 0);
+    const officialTotalJpy = items.reduce(
+      (total, item) => total + (item.latestOfficialPriceJpy || item.latestPriceJpy || 0),
+      0
+    );
+    const discountRate =
+      officialTotalJpy > totalPriceJpy
+        ? Math.round(((officialTotalJpy - totalPriceJpy) * 100) / officialTotalJpy)
+        : 0;
+    const score =
+      items.reduce((total, item) => total + (item.recommendationScore ?? 0), 0) +
+      items.length * 8 +
+      discountRate * 0.35;
+
+    return {
+      circleKey,
+      circle,
+      itemCount: items.length,
+      totalPriceJpy,
+      officialTotalJpy,
+      discountRate,
+      leftoverJpy: budget - totalPriceJpy,
+      bundleScore: Math.round(score * 10) / 10,
+      reasons: [
+        `${items.length} same-circle candidates`,
+        `${(budget - totalPriceJpy).toLocaleString("ja-JP")} JPY left in budget`,
+        discountRate > 0 ? `${discountRate}% below official snapshot total` : "current public prices fit budget",
+      ],
+      items: items.map(compactBundleWork),
+      claimsCheckoutOptimization: false,
+    };
+  }
+
+  function buildCircleBundles(items, budget) {
+    const groups = new Map();
+    for (const item of items) {
+      const circleKey = item.circleId || item.circle;
+      if (!circleKey || !item.circle || !Number.isFinite(Number(item.latestPriceJpy))) continue;
+      const group = groups.get(circleKey) ?? { circleKey, circle: item.circle, items: [] };
+      group.items.push(item);
+      groups.set(circleKey, group);
+    }
+
+    const bundles = [];
+    for (const group of groups.values()) {
+      const candidates = group.items
+        .filter((item) => item.latestPriceJpy > 0 && item.latestPriceJpy <= budget)
+        .sort((a, b) => b.recommendationScore - a.recommendationScore || a.latestPriceJpy - b.latestPriceJpy)
+        .slice(0, 8);
+      if (candidates.length < 2) continue;
+
+      const groupBundles = [];
+      const visit = (start, picked, total) => {
+        if (picked.length >= 2) {
+          groupBundles.push(summarizeBundle({ circleKey: group.circleKey, circle: group.circle, items: picked, budget }));
+        }
+        if (picked.length >= 4) return;
+        for (let index = start; index < candidates.length; index += 1) {
+          const item = candidates[index];
+          const nextTotal = total + item.latestPriceJpy;
+          if (nextTotal > budget) continue;
+          visit(index + 1, [...picked, item], nextTotal);
+        }
+      };
+
+      visit(0, [], 0);
+      groupBundles.sort(
+        (a, b) => b.bundleScore - a.bundleScore || b.itemCount - a.itemCount || a.totalPriceJpy - b.totalPriceJpy
+      );
+      if (groupBundles[0]) bundles.push(groupBundles[0]);
+    }
+
+    return bundles.sort(
+      (a, b) =>
+        b.bundleScore - a.bundleScore ||
+        b.itemCount - a.itemCount ||
+        a.totalPriceJpy - b.totalPriceJpy ||
+        a.circle.localeCompare(b.circle)
+    );
+  }
+
+  function getBundleRecommendations({ budgetJpy = null, limit = 5, excludeCollection = true } = {}) {
+    const { budget } = getRecommendationBudget(budgetJpy);
+    if (!budget) {
+      return {
+        budgetJpy: budget,
+        items: [],
+        algorithm: "same-circle-public-price-bundles",
+        disclaimer: "Local public-price analysis only; DLsite cart totals, coupon ownership, and final checkout optimization are not claimed.",
+      };
+    }
+
+    const candidates = getAffordableRecommendationCandidates({ budget, excludeCollection });
+    return {
+      budgetJpy: budget,
+      items: buildCircleBundles(candidates, budget).slice(0, Math.min(Math.max(Number(limit) || 5, 1), 10)),
+      algorithm: "group eligible recommendation candidates by circle -> enumerate 2-4 work public-price bundles within budget",
+      disclaimer: "Local public-price analysis only; DLsite cart totals, coupon ownership, and final checkout optimization are not claimed.",
+    };
+  }
+
   return {
     saveAccountSession,
     saveAccountSyncResult,
@@ -300,5 +429,6 @@ export function createAccountRepository({ db, statements }) {
     getAccountSyncState,
     clearAccountSession,
     getAffordableRecommendations,
+    getBundleRecommendations,
   };
 }

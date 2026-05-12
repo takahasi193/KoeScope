@@ -1,5 +1,5 @@
 import { openMonitorDatabase } from "./monitor/db/connection.js";
-import { asJson, parseJson } from "./monitor/db/utils.js";
+import { asJson, mapJoinedWorkAnnotation, mapPersonSubscription, parseJson } from "./monitor/db/utils.js";
 import { normalizeSpace } from "./cache.js";
 
 const DEFAULT_HISTORY_LIMIT = 20;
@@ -174,6 +174,7 @@ function mapResultRow(row) {
 
 function mapPersonWorkRow(row) {
   const item = mapResultRow(row);
+  const annotation = mapJoinedWorkAnnotation(row);
   return {
     ...item,
     typeLabel: item.typeLabel ?? TYPE_LABELS[item.type] ?? item.type,
@@ -186,6 +187,7 @@ function mapPersonWorkRow(row) {
     watchNote: row.watch_note,
     watchSource: row.watch_source,
     watchUpdatedAt: row.watch_updated_at,
+    annotation,
   };
 }
 
@@ -546,6 +548,12 @@ export function createSearchHistoryRepository(options = {}) {
             w.note AS watch_note,
             w.source AS watch_source,
             w.updated_at AS watch_updated_at,
+            wa.product_id AS annotation_product_id,
+            wa.note AS annotation_note,
+            wa.tags_json AS annotation_tags_json,
+            wa.status AS annotation_status,
+            wa.created_at AS annotation_created_at,
+            wa.updated_at AS annotation_updated_at,
             ROW_NUMBER() OVER (
               PARTITION BY r.product_id
               ORDER BY s.updated_at DESC, r.display_order ASC, COALESCE(r.source_order, r.display_order) ASC
@@ -553,6 +561,7 @@ export function createSearchHistoryRepository(options = {}) {
           FROM search_session_results r
           JOIN search_sessions s ON s.id = r.search_session_id
           LEFT JOIN watchlist w ON w.product_id = r.product_id
+          LEFT JOIN work_annotations wa ON wa.product_id = r.product_id
           WHERE ${sourceClauses.join(" AND ")}
         )
         SELECT *
@@ -576,6 +585,9 @@ export function createSearchHistoryRepository(options = {}) {
     const person = parseJson(latest.person_json, {}) ?? {};
     const works = getPersonWorkRows(normalizedPersonId, { limit: null });
     const recentSearches = sessionRows.slice(0, clampLimit(recentLimit)).map(mapSessionRow);
+    const subscription = mapPersonSubscription(
+      db.prepare("SELECT * FROM person_subscriptions WHERE person_id = ?").get(normalizedPersonId)
+    );
 
     return {
       person: {
@@ -586,6 +598,7 @@ export function createSearchHistoryRepository(options = {}) {
       aliases: collectAliases(sessionRows),
       stats: buildPersonStats(works, sessionRows.length, latest.updated_at),
       recentSearches,
+      subscription,
       dataSource: {
         kind: "local_search_history",
         label: "本地搜索历史",
@@ -630,6 +643,24 @@ export function createSearchHistoryRepository(options = {}) {
     };
   }
 
+  function getKnownPersonProductIds(personId) {
+    const normalizedPersonId = toNullableInteger(personId);
+    if (normalizedPersonId === null) return [];
+
+    return db
+      .prepare(
+        `
+          SELECT DISTINCT r.product_id
+          FROM search_session_results r
+          JOIN search_sessions s ON s.id = r.search_session_id
+          WHERE s.person_id = ?
+          ORDER BY r.product_id ASC
+        `
+      )
+      .all(normalizedPersonId)
+      .map((row) => row.product_id);
+  }
+
   function close() {
     if (!options.db) db.close();
   }
@@ -642,6 +673,7 @@ export function createSearchHistoryRepository(options = {}) {
     getPersonSearches,
     getPersonProfile,
     getPersonWorks,
+    getKnownPersonProductIds,
     close,
   };
 }

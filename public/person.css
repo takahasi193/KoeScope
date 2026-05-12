@@ -10,7 +10,7 @@
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--surface-panel);
   box-shadow: var(--shadow);
 }
 
@@ -49,6 +49,84 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: end;
+}
+
+.person-subscription-box {
+  grid-column: 2 / 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-panel);
+}
+
+.person-subscription-box strong {
+  display: block;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.person-subscription-box p {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.person-subscription-box .mini-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.person-subscription-box .mini-button {
+  min-height: 34px;
+  border: 1px solid var(--accent-border);
+  border-radius: 7px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 850;
+  white-space: nowrap;
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    background 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.person-subscription-box .mini-button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.person-subscription-box .mini-button:hover:not(:disabled),
+.person-subscription-box .mini-button:focus-visible {
+  border-color: var(--accent-border-strong);
+  background: var(--accent-wash);
+  color: var(--accent-deep);
+  box-shadow:
+    0 0 0 3px var(--focus-ring),
+    var(--shadow-soft);
+  outline: none;
+  transform: translateY(-2px);
+}
+
+.person-subscription-box .mini-button.primary:hover:not(:disabled),
+.person-subscription-box .mini-button.primary:focus-visible {
+  border-color: var(--accent-deep);
+  background: var(--accent-deep);
+  color: var(--text-on-accent);
+}
+
+.person-subscription-box .mini-button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 .person-layout {
@@ -117,7 +195,7 @@
 .stat-cell {
   min-width: 0;
   padding: 14px 16px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--surface-raised);
 }
 
 .stat-cell strong {
@@ -146,7 +224,7 @@
   align-items: end;
   padding: 12px 16px;
   border-bottom: 1px solid var(--line);
-  background: rgba(237, 242, 240, 0.45);
+  background: var(--accent-wash);
 }
 
 .source-state {
@@ -259,12 +337,12 @@
   grid-template-columns: 132px minmax(0, 1fr) minmax(280px, 380px);
   gap: clamp(18px, 3vw, 30px);
   padding: 54px clamp(18px, 2.6vw, 30px) clamp(18px, 2.6vw, 30px);
-  border-color: rgba(0, 149, 255, 0.16);
+  border-color: var(--accent-border);
   border-top: 4px solid var(--accent);
   border-radius: 8px;
   background:
-    linear-gradient(90deg, rgba(228, 246, 255, 0.72), rgba(255, 255, 255, 0) 54%),
-    rgba(255, 255, 255, 0.96);
+    linear-gradient(90deg, var(--accent-wash), transparent 54%),
+    var(--surface-raised);
   box-shadow: none;
   overflow: hidden;
 }
@@ -279,9 +357,9 @@
 .person-avatar {
   width: 132px;
   height: 132px;
-  border: 1px solid rgba(0, 149, 255, 0.14);
+  border: 1px solid var(--accent-border);
   border-radius: 8px;
-  box-shadow: 0 14px 28px rgba(21, 36, 58, 0.08);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.08);
 }
 
 .person-title-block h2 {
@@ -302,8 +380,19 @@
 .person-lookup {
   align-self: stretch;
   align-content: end;
-  border-left: 1px solid rgba(0, 149, 255, 0.14);
+  border-left: 1px solid var(--accent-border);
   padding-left: clamp(16px, 2vw, 24px);
+}
+
+.person-subscription-box {
+  border-color: var(--accent-border);
+  background: linear-gradient(90deg, var(--accent-wash), var(--surface-strong));
+}
+
+.person-subscription-box strong {
+  color: var(--accent-deep);
+  font-size: 18px;
+  font-weight: 900;
 }
 
 .person-layout {
@@ -323,7 +412,7 @@
   position: relative;
   gap: 6px;
   padding: 14px 16px 14px 38px;
-  border-bottom-color: rgba(0, 149, 255, 0.12);
+  border-bottom-color: var(--accent-border);
   transition:
     transform 160ms ease,
     background 160ms ease;
@@ -339,7 +428,7 @@
   height: 9px;
   border: 2px solid var(--accent);
   border-radius: 999px;
-  background: #fff;
+  background: var(--surface-strong);
 }
 
 .recent-search::after {
@@ -349,7 +438,7 @@
   bottom: -8px;
   left: 20px;
   width: 1px;
-  background: rgba(0, 149, 255, 0.18);
+  background: var(--accent-border);
 }
 
 .recent-search:last-child::after {
@@ -368,13 +457,13 @@
 
 .stats-grid {
   grid-template-columns: repeat(6, minmax(120px, 1fr));
-  border-bottom-color: rgba(0, 149, 255, 0.14);
-  background: rgba(0, 149, 255, 0.14);
+  border-bottom-color: var(--accent-border);
+  background: var(--accent-border);
 }
 
 .stat-cell {
   padding: 18px;
-  background: #fff;
+  background: var(--surface-strong);
 }
 
 .stat-cell strong {
@@ -394,7 +483,7 @@
 
 .person-filters {
   grid-template-columns: minmax(140px, 160px) minmax(140px, 160px) minmax(240px, 1fr);
-  border-bottom-color: rgba(0, 149, 255, 0.12);
+  border-bottom-color: var(--accent-border);
   background: var(--accent-wash);
 }
 
@@ -414,7 +503,7 @@
   grid-template-columns: 92px minmax(0, 1fr) auto;
   gap: 18px;
   padding: 16px 18px;
-  border-bottom-color: rgba(0, 149, 255, 0.12);
+  border-bottom-color: var(--accent-border);
   transition:
     transform 160ms ease,
     background 160ms ease;
@@ -441,9 +530,33 @@
 }
 
 .watch-state {
-  border-color: rgba(0, 149, 255, 0.18);
+  border-color: var(--accent-border);
   background: var(--accent-soft);
   color: var(--accent-deep);
+}
+
+.work-annotation {
+  display: grid;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.work-annotation p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.annotation-status,
+.annotation-tag {
+  border-color: var(--accent-border);
+  background: var(--accent-wash);
+}
+
+.annotation-action {
+  background: var(--accent-wash);
 }
 
 @media (max-width: 1040px) {
@@ -453,9 +566,15 @@
     grid-template-columns: 1fr;
   }
 
+  .person-subscription-box {
+    grid-column: auto;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .person-lookup {
     border-left: 0;
-    border-top: 1px solid rgba(0, 149, 255, 0.14);
+    border-top: 1px solid var(--accent-border);
     padding-top: 16px;
     padding-left: 0;
   }

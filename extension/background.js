@@ -1,5 +1,16 @@
+import {
+  buildNotificationItems,
+  normalizeBackendBase,
+  notificationIdFor,
+  selectNewNotificationItems,
+} from "./notificationPolling.js";
+
 const MENU_ID = "koescope-selection";
 const ACCOUNT_SYNC_STATUS_KEY = "dlsiteAccountSyncStatus";
+const NOTIFICATION_STATE_KEY = "koescopeNotificationState";
+const NOTIFICATION_ALARM_NAME = "koescope-unread-alerts";
+const NOTIFICATION_POLL_MINUTES = 15;
+const NOTIFICATION_ICON = "icons/koescope-icon-128.png";
 const ACCOUNT_LIST_MAX_PAGES = 30;
 const DLSITE_ACCOUNT_PAGES = [
   { type: "point", label: "点数", url: "https://www.dlsite.com/home/mypage" },
@@ -58,6 +69,65 @@ async function getJson(baseUrl, path) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
   return payload;
+}
+
+async function readBackendBase() {
+  const data = await chrome.storage.local.get("backendBase");
+  return normalizeBackendBase(data.backendBase);
+}
+
+async function readNotificationState() {
+  const data = await chrome.storage.local.get(NOTIFICATION_STATE_KEY);
+  return data[NOTIFICATION_STATE_KEY] ?? {};
+}
+
+async function writeNotificationState(state) {
+  await chrome.storage.local.set({ [NOTIFICATION_STATE_KEY]: state });
+}
+
+async function fetchNotificationItems(baseUrl) {
+  const [alertsPayload, activitySummary] = await Promise.all([
+    getJson(baseUrl, "/api/alerts?status=unread&limit=8"),
+    getJson(baseUrl, "/api/activity-alerts/summary?limit=8"),
+  ]);
+  return buildNotificationItems({ alertsPayload, activitySummary });
+}
+
+async function showNotificationItem(item) {
+  if (!chrome.notifications?.create) return;
+  await chrome.notifications.create(notificationIdFor(item), {
+    type: "basic",
+    iconUrl: NOTIFICATION_ICON,
+    title: item.title,
+    message: item.message,
+    contextMessage: item.context || "KoeScope",
+    priority: 1,
+  });
+}
+
+async function pollUnreadNotifications() {
+  const previousState = await readNotificationState();
+  try {
+    const backendBase = await readBackendBase();
+    const items = await fetchNotificationItems(backendBase);
+    const { newItems, nextState } = selectNewNotificationItems(items, previousState);
+    await writeNotificationState({ ...nextState, backendBase });
+    for (const item of newItems) await showNotificationItem(item);
+  } catch (error) {
+    await writeNotificationState({
+      ...previousState,
+      lastCheckedAt: nowIso(),
+      lastError: error.message,
+    });
+  }
+}
+
+function scheduleNotificationPolling() {
+  if (!chrome.alarms?.create) return;
+  chrome.alarms.create(NOTIFICATION_ALARM_NAME, {
+    periodInMinutes: NOTIFICATION_POLL_MINUTES,
+    delayInMinutes: 1,
+  });
 }
 
 function sleep(ms) {
@@ -369,6 +439,9 @@ async function runDlsiteAccountSync({ backendBase, mode = "quick" }) {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
+  scheduleNotificationPolling();
+  void pollUnreadNotifications();
+
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: MENU_ID,
@@ -376,6 +449,23 @@ chrome.runtime.onInstalled.addListener(() => {
       contexts: ["selection"],
     });
   });
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  scheduleNotificationPolling();
+  void pollUnreadNotifications();
+});
+
+chrome.alarms?.onAlarm?.addListener((alarm) => {
+  if (alarm.name === NOTIFICATION_ALARM_NAME) void pollUnreadNotifications();
+});
+
+chrome.notifications?.onClicked?.addListener(async (notificationId) => {
+  if (!String(notificationId).startsWith("koescope-")) return;
+  const backendBase = await readBackendBase();
+  const hash = notificationId.includes("activity") ? "#activities" : "";
+  await chrome.tabs.create({ url: `${backendBase}/dashboard.html${hash}`, active: true });
+  await chrome.notifications.clear(notificationId).catch(() => {});
 });
 
 chrome.contextMenus.onClicked.addListener(async (info) => {

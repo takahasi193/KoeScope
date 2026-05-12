@@ -18,6 +18,11 @@ It is a Node.js 20 + Express 5 app with a plain HTML/CSS/JS frontend, SQLite per
 
 - Read this file before making project changes.
 - Check `git status --short` before editing and preserve unrelated local changes.
+- Before future optimization or feature work, read `docs/remaining-roadmap.md` and align the work with the next relevant unchecked item.
+- After completing an optimization or feature item, update `docs/remaining-roadmap.md` in the same change set by marking the item complete or deleting the completed note.
+- For every feature or optimization task, create a new git branch before editing code or tests. Use a short descriptive branch name such as `feature/dark-mode` or `optimize/snapshot-cleanup`.
+- Do not merge a feature or optimization branch into `main` until both checks have happened: Codex has run the relevant automated tests and smoke checks, and the user has personally tested and approved the result.
+- Do not run `git add`, `git commit`, or merge into `main` for feature or optimization work unless the user explicitly asks after the dual-testing step. Documentation-only planning edits may stay unstaged unless the user asks to commit them.
 - Prefer narrow patches that follow existing plain HTML/CSS/JS, Express, and SQLite patterns.
 - Use `apply_patch` for manual edits.
 - Prefer `rg` for searching code and tests.

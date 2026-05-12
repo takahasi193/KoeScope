@@ -159,6 +159,112 @@ test("repository normalizes watchlist inputs and rejects invalid target prices",
   }
 });
 
+test("repository stores local work annotations and exposes them with watchlist and history", () => {
+  const repo = createMonitorRepository({ dbPath: tempDbPath() });
+  try {
+    const run = repo.createSyncRun({ scope: { reason: "test" }, totalTargets: 1 });
+    repo.saveSyncedProducts({
+      syncRunId: run.id,
+      capturedAt: "2026-05-02T00:00:00.000Z",
+      entries: [sampleEntry({ productId: "RJ220001", title: "Annotated Voice" })],
+    });
+    repo.addWatchlist({ productId: "RJ220001" });
+
+    const empty = repo.getWorkAnnotation(" rj220001 ");
+    assert.equal(empty.productId, "RJ220001");
+    assert.equal(empty.note, "");
+    assert.deepEqual(empty.tags, []);
+
+    const saved = repo.saveWorkAnnotation({
+      productId: " rj220001 ",
+      status: "Favorite",
+      tags: [" ASMR ", "asmr", "sale", "favorite"],
+      note: "  local only note  ",
+    });
+    assert.equal(saved.status, "favorite");
+    assert.deepEqual(saved.tags, ["ASMR", "sale", "favorite"]);
+    assert.equal(saved.note, "local only note");
+
+    const watched = repo.getWatchlist()[0];
+    assert.equal(watched.annotation.status, "favorite");
+    assert.deepEqual(watched.annotation.tags, ["ASMR", "sale", "favorite"]);
+
+    const history = repo.getWorkHistory("RJ220001");
+    assert.equal(history.annotation.note, "local only note");
+    assert.equal(history.work.annotation.status, "favorite");
+
+    assert.throws(
+      () => repo.saveWorkAnnotation({ productId: "RJ220001", status: "account_owned" }),
+      /annotation status must be one of/
+    );
+
+    assert.equal(repo.deleteWorkAnnotation("RJ220001"), true);
+    assert.equal(repo.getWorkAnnotation("RJ220001").status, "");
+    assert.equal(repo.getWorkHistory("RJ220001").annotation.note, "");
+  } finally {
+    repo.close();
+  }
+});
+
+test("repository stores person subscriptions and dedupes possible new work alerts per person/work pair", () => {
+  const repo = createMonitorRepository({ dbPath: tempDbPath() });
+  try {
+    const subscription = repo.savePersonSubscription({
+      personId: 123,
+      personName: "Aoyama Yukari",
+      aliases: ["Aoyama Yukari", "Yukari", "Aoyama Yukari"],
+      keyword: "Aoyama Yukari",
+    });
+    assert.equal(subscription.personId, 123);
+    assert.deepEqual(subscription.aliases, ["Aoyama Yukari", "Yukari"]);
+
+    repo.saveImportedWork(sampleEntry({ productId: "RJ230001", title: "Fresh Voice" }));
+    assert.equal(
+      repo.createPossibleNewWorkAlert({
+        personId: 123,
+        personName: "Aoyama Yukari",
+        productId: "RJ230001",
+        message: "Aoyama Yukari 可能的新作：Fresh Voice",
+        fingerprint: "possible_new_work:123:RJ230001",
+        metadata: { confidence: "possible" },
+      }),
+      true
+    );
+    assert.equal(
+      repo.createPossibleNewWorkAlert({
+        personId: 123,
+        personName: "Aoyama Yukari",
+        productId: "RJ230001",
+        message: "Aoyama Yukari 可能的新作：Fresh Voice",
+        fingerprint: "possible_new_work:123:RJ230001",
+        metadata: { confidence: "possible" },
+      }),
+      false
+    );
+
+    const alerts = repo.getAlerts({ status: "all" });
+    assert.equal(alerts.length, 1);
+    assert.equal(alerts[0].type, "possible_new_work");
+    assert.equal(alerts[0].personId, 123);
+    assert.equal(alerts[0].personName, "Aoyama Yukari");
+    assert.equal(alerts[0].metadata.confidence, "possible");
+
+    const updatedSubscription = repo.updatePersonSubscriptionCheck(123, {
+      status: "completed",
+      checkedAt: "2026-05-12T00:00:00.000Z",
+      resultCount: 2,
+      newItemCount: 1,
+    });
+    assert.equal(updatedSubscription.lastCheckStatus, "completed");
+    assert.equal(updatedSubscription.lastNewItemCount, 1);
+
+    assert.equal(repo.deletePersonSubscription(123), true);
+    assert.equal(repo.getPersonSubscription(123), null);
+  } finally {
+    repo.close();
+  }
+});
+
 test("repository stores independent total and category ranking snapshots", () => {
   const repo = createMonitorRepository({ dbPath: tempDbPath() });
   try {
@@ -310,6 +416,84 @@ test("repository excludes purchased account works from automatic watchlist", () 
       () => repo.addWatchlist({ productId: "RJ500001" }),
       /已购作品无需加入价格关注/
     );
+  } finally {
+    repo.close();
+  }
+});
+
+test("repository suggests same-circle public-price bundles without checkout claims", () => {
+  const repo = createMonitorRepository({ dbPath: tempDbPath() });
+  try {
+    const run = repo.createSyncRun({ scope: { reason: "test" }, totalTargets: 4 });
+    repo.saveSyncedProducts({
+      syncRunId: run.id,
+      capturedAt: "2026-05-04T00:00:00.000Z",
+      entries: [
+        sampleEntry({
+          productId: "RJ600001",
+          rank: 3,
+          category: "all",
+          title: "Bundle Voice 1",
+          circle: "Bundle Circle",
+          circleId: "RG600",
+          priceJpy: 900,
+          officialPriceJpy: 1800,
+          discountRate: 50,
+          sales: 1600,
+        }),
+        sampleEntry({
+          productId: "RJ600002",
+          rank: 4,
+          category: "all",
+          title: "Bundle Voice 2",
+          circle: "Bundle Circle",
+          circleId: "RG600",
+          priceJpy: 700,
+          officialPriceJpy: 1400,
+          discountRate: 50,
+          sales: 1200,
+        }),
+        sampleEntry({
+          productId: "RJ600003",
+          rank: 5,
+          category: "all",
+          title: "Bundle Voice 3",
+          circle: "Bundle Circle",
+          circleId: "RG600",
+          priceJpy: 600,
+          officialPriceJpy: 1200,
+          discountRate: 50,
+          sales: 900,
+        }),
+        sampleEntry({
+          productId: "RJ600004",
+          rank: 2,
+          category: "all",
+          title: "Other Circle Deal",
+          circle: "Other Circle",
+          circleId: "RG601",
+          priceJpy: 700,
+          officialPriceJpy: 1400,
+          discountRate: 50,
+          sales: 1500,
+        }),
+      ],
+    });
+
+    repo.saveAccountSession({ cookieHeader: "__DLsite_SID=test" });
+    repo.saveAccountSyncResult({ displayName: "tester", pointsJpy: 1600, lists: [] });
+
+    const recommendations = repo.getBundleRecommendations({ limit: 3 });
+    assert.equal(recommendations.budgetJpy, 1600);
+    assert.match(recommendations.disclaimer, /not claimed/);
+    assert.ok(recommendations.items.length > 0);
+
+    const top = recommendations.items[0];
+    assert.equal(top.circle, "Bundle Circle");
+    assert.equal(top.claimsCheckoutOptimization, false);
+    assert.equal(top.itemCount >= 2, true);
+    assert.equal(top.totalPriceJpy <= 1600, true);
+    assert.equal(new Set(top.items.map((item) => item.circleId)).size, 1);
   } finally {
     repo.close();
   }

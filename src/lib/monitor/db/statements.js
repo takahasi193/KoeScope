@@ -106,11 +106,11 @@ export function prepareMonitorStatements(db) {
     insertAlert: db.prepare(`
       INSERT OR IGNORE INTO alerts (
         product_id, type, previous_price_jpy, current_price_jpy, target_price_jpy,
-        message, status, created_at, source_run_id, fingerprint
+        message, status, created_at, source_run_id, person_id, person_name, metadata_json, fingerprint
       )
       VALUES (
         @productId, @type, @previousPriceJpy, @currentPriceJpy, @targetPriceJpy,
-        @message, 'unread', @createdAt, @sourceRunId, @fingerprint
+        @message, 'unread', @createdAt, @sourceRunId, @personId, @personName, @metadataJson, @fingerprint
       )
     `),
     addWatchlist: db.prepare(`
@@ -132,7 +132,56 @@ export function prepareMonitorStatements(db) {
         updated_at = excluded.updated_at
     `),
     deleteWatchlist: db.prepare("DELETE FROM watchlist WHERE product_id = ?"),
+    upsertWorkAnnotation: db.prepare(`
+      INSERT INTO work_annotations (product_id, note, tags_json, status, created_at, updated_at)
+      VALUES (@productId, @note, @tagsJson, @status, @now, @now)
+      ON CONFLICT(product_id) DO UPDATE SET
+        note = excluded.note,
+        tags_json = excluded.tags_json,
+        status = excluded.status,
+        updated_at = excluded.updated_at
+    `),
+    deleteWorkAnnotation: db.prepare("DELETE FROM work_annotations WHERE product_id = ?"),
     markAlertRead: db.prepare("UPDATE alerts SET status = 'read' WHERE id = ?"),
+    getPersonSubscription: db.prepare("SELECT * FROM person_subscriptions WHERE person_id = ?"),
+    upsertPersonSubscription: db.prepare(`
+      INSERT INTO person_subscriptions (
+        person_id, person_name, person_image, source_url, keyword, aliases_json,
+        created_at, updated_at, last_checked_at, last_successful_check_at,
+        last_check_status, last_error, last_result_count, last_new_item_count
+      )
+      VALUES (
+        @personId, @personName, @personImage, @sourceUrl, @keyword, @aliasesJson,
+        @createdAt, @updatedAt, @lastCheckedAt, @lastSuccessfulCheckAt,
+        @lastCheckStatus, @lastError, @lastResultCount, @lastNewItemCount
+      )
+      ON CONFLICT(person_id) DO UPDATE SET
+        person_name = excluded.person_name,
+        person_image = excluded.person_image,
+        source_url = excluded.source_url,
+        keyword = excluded.keyword,
+        aliases_json = excluded.aliases_json,
+        updated_at = excluded.updated_at
+    `),
+    updatePersonSubscriptionCheck: db.prepare(`
+      UPDATE person_subscriptions
+      SET updated_at = @updatedAt,
+          last_checked_at = @lastCheckedAt,
+          last_successful_check_at = @lastSuccessfulCheckAt,
+          last_check_status = @lastCheckStatus,
+          last_error = @lastError,
+          last_result_count = @lastResultCount,
+          last_new_item_count = @lastNewItemCount
+      WHERE person_id = @personId
+    `),
+    listDuePersonSubscriptions: db.prepare(`
+      SELECT *
+      FROM person_subscriptions
+      WHERE last_checked_at IS NULL OR last_checked_at <= @dueBefore
+      ORDER BY COALESCE(last_checked_at, '') ASC, updated_at ASC, person_id ASC
+      LIMIT @limit
+    `),
+    deletePersonSubscription: db.prepare("DELETE FROM person_subscriptions WHERE person_id = ?"),
     getAccountSession: db.prepare("SELECT * FROM account_session WHERE id = 1"),
     upsertAccountSession: db.prepare(`
       INSERT INTO account_session (

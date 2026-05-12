@@ -108,6 +108,31 @@ function escapeAttribute(value) {
   return escapeHtml(value).replaceAll("`", "&#096;");
 }
 
+function imageSource(item) {
+  return item?.cachedImageUrl || item?.imageUrl || "";
+}
+
+function imageFallbackAttribute(item) {
+  const primary = item?.cachedImageUrl || "";
+  const fallback = item?.imageUrl || item?.remoteImageUrl || "";
+  return primary && fallback && primary !== fallback ? ` data-fallback-src="${escapeAttribute(fallback)}"` : "";
+}
+
+function installImageFallbacks() {
+  document.addEventListener(
+    "error",
+    (event) => {
+      const image = event.target;
+      if (!image || image.tagName !== "IMG") return;
+      const fallback = image.dataset?.fallbackSrc;
+      if (!fallback) return;
+      image.removeAttribute("data-fallback-src");
+      image.src = fallback;
+    },
+    true
+  );
+}
+
 const activityUi = window.DlsiteActivityUi.createActivityUi({
   formatNumber,
   formatPrice,
@@ -118,6 +143,8 @@ const activityUi = window.DlsiteActivityUi.createActivityUi({
   relatedPreviewLimit: 3,
   detailFactLimit: 5,
 });
+
+installImageFallbacks();
 const {
   formatTimeLeft,
   formatActivityWindow,
@@ -221,7 +248,7 @@ function renderActivities() {
     node.className = "activity-card activity-center-card";
     node.innerHTML = `
       <a href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">
-        <img src="${escapeAttribute(item.imageUrl)}" alt="" loading="lazy" />
+        <img src="${escapeAttribute(imageSource(item))}"${imageFallbackAttribute(item)} alt="" loading="lazy" />
       </a>
       <div class="activity-card-body">
         <a class="activity-title" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>

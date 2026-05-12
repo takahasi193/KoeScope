@@ -1,9 +1,11 @@
 import { createAccountRepository } from "./db/accountRepository.js";
+import { createAnnotationsRepository } from "./db/annotationsRepository.js";
 import { createActivitiesRepository } from "./db/activitiesRepository.js";
 import { createAlertsRepository } from "./db/alertsRepository.js";
 import { openMonitorDatabase } from "./db/connection.js";
 import { createRankingsRepository } from "./db/rankingsRepository.js";
 import { prepareMonitorStatements } from "./db/statements.js";
+import { createSubscriptionsRepository } from "./db/subscriptionsRepository.js";
 import { createWatchlistRepository } from "./db/watchlistRepository.js";
 import { createWorksRepository } from "./db/worksRepository.js";
 
@@ -14,6 +16,7 @@ export function createMonitorRepository(options = {}) {
   const works = createWorksRepository({ db, statements });
   const rankings = createRankingsRepository({ db, statements });
   const account = createAccountRepository({ db, statements });
+  const annotations = createAnnotationsRepository({ db, statements });
   const activities = createActivitiesRepository({
     db,
     statements,
@@ -25,6 +28,10 @@ export function createMonitorRepository(options = {}) {
     statements,
     saveImportedWork: works.saveImportedWork,
   });
+  const subscriptions = createSubscriptionsRepository({
+    db,
+    statements,
+  });
 
   function getDashboardSummary() {
     const workStats = works.getWorkStats();
@@ -34,6 +41,7 @@ export function createMonitorRepository(options = {}) {
     const notableDrops = works.getNotablePriceDrops(8);
     const activityStats = activities.getActivityDashboardStats();
     const activityMatchStats = activities.getActivityWorkMatchSummary();
+    const subscriptionStats = subscriptions.getSubscriptionStats();
 
     return {
       totalWorks: workStats.totalWorks ?? 0,
@@ -41,6 +49,7 @@ export function createMonitorRepository(options = {}) {
       discountedWorks: workStats.discountedWorks ?? 0,
       watchedWorks: watchStats.watchedWorks ?? 0,
       unreadAlerts,
+      subscribedPersons: subscriptionStats.subscribedPersons ?? 0,
       ...activityStats,
       activityWorkMatches: activityMatchStats.totalMatches,
       activityMatchedWorks: activityMatchStats.matchedWorks,
@@ -66,6 +75,7 @@ export function createMonitorRepository(options = {}) {
     getActivitySyncRun: activities.getActivitySyncRun,
     getLatestActivitySyncRun: activities.getLatestActivitySyncRun,
     saveSyncedProducts: works.saveSyncedProducts,
+    saveImportedWork: works.saveImportedWork,
     saveActivities: activities.saveActivities,
     getDashboardSummary,
     getActivities: activities.getActivities,
@@ -77,6 +87,15 @@ export function createMonitorRepository(options = {}) {
     importWorkToWatchlist: watchlist.importWorkToWatchlist,
     deleteWatchlist: watchlist.deleteWatchlist,
     getWatchlist: watchlist.getWatchlist,
+    getWorkAnnotation: annotations.getWorkAnnotation,
+    saveWorkAnnotation: annotations.saveWorkAnnotation,
+    deleteWorkAnnotation: annotations.deleteWorkAnnotation,
+    getPersonSubscription: subscriptions.getPersonSubscription,
+    savePersonSubscription: subscriptions.savePersonSubscription,
+    deletePersonSubscription: subscriptions.deletePersonSubscription,
+    listDuePersonSubscriptions: subscriptions.listDuePersonSubscriptions,
+    updatePersonSubscriptionCheck: subscriptions.updatePersonSubscriptionCheck,
+    createPossibleNewWorkAlert: subscriptions.createPossibleNewWorkAlert,
     getAlerts: alerts.getAlerts,
     markAlertRead: alerts.markAlertRead,
     markActivityAlertRead: activities.markActivityAlertRead,
@@ -86,6 +105,7 @@ export function createMonitorRepository(options = {}) {
     getAccountSyncState: account.getAccountSyncState,
     clearAccountSession: account.clearAccountSession,
     getAffordableRecommendations: account.getAffordableRecommendations,
+    getBundleRecommendations: account.getBundleRecommendations,
     close,
   };
 }

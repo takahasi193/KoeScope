@@ -81,3 +81,186 @@ test("monitor activity payload keeps related-work matches and adds activity stat
   assert.equal(payload.syncStatus.latestRun.id, 5);
   assert.equal(payload.account.pointsJpy, 500);
 });
+
+test("monitor payloads expose cached image URLs without replacing remote URLs", () => {
+  const imageCache = {
+    resolveCachedImageUrl: (url, { type }) => (url ? `/cache/${type}/${url.split("/").at(-1)}` : ""),
+  };
+  const repository = {
+    getDashboardSummary: () => ({
+      totalWorks: 1,
+      notableDrops: [{ productId: "RJ100001", imageUrl: "https://img.example/drop.jpg" }],
+    }),
+    getRankings: (query) => ({
+      ...query,
+      items: [{ productId: "RJ100001", imageUrl: "https://img.example/rank.jpg" }],
+    }),
+    getActivities: () => ({
+      items: [
+        {
+          activityId: "dlsite:coupon",
+          imageUrl: "https://img.example/banner.jpg",
+          relatedWorks: [{ productId: "RJ100001", imageUrl: "https://img.example/work.jpg" }],
+        },
+      ],
+      activityMatches: {
+        totalMatches: 1,
+        sampleMatches: [{ productId: "RJ100001", imageUrl: "https://img.example/sample.jpg" }],
+      },
+      personalSummary: { relatedWorks: { sampleMatches: [] } },
+    }),
+    getLatestActivitySyncRun: () => ({ id: 5, status: "completed", startedAt: "2026-05-10T00:00:00.000Z" }),
+    getAccountProfile: () => ({ hasSession: false, lists: {} }),
+    close: () => {},
+  };
+
+  const monitor = createDlsiteMonitor({ repository, imageCache });
+  const summary = monitor.getDashboardSummary();
+  const rankings = monitor.getRankings({ floor: "home", period: "week", category: "voice" });
+  const activities = monitor.getActivities({ status: "active", benefit: "coupon" });
+
+  assert.equal(summary.notableDrops[0].cachedImageUrl, "/cache/work/drop.jpg");
+  assert.equal(rankings.items[0].cachedImageUrl, "/cache/work/rank.jpg");
+  assert.equal(rankings.items[0].imageUrl, "https://img.example/rank.jpg");
+  assert.equal(rankings.items[0].remoteImageUrl, "https://img.example/rank.jpg");
+  assert.equal(activities.items[0].cachedImageUrl, "/cache/activity/banner.jpg");
+  assert.equal(activities.items[0].relatedWorks[0].cachedImageUrl, "/cache/work/work.jpg");
+  assert.equal(activities.activityMatches.sampleMatches[0].cachedImageUrl, "/cache/work/sample.jpg");
+});
+
+test("monitor subscription checks persist snapshots and dedupe person-work reminders", async () => {
+  const alerts = new Set();
+  const savedWorks = [];
+  let subscription = {
+    personId: 123,
+    personName: "Aoyama Yukari",
+    personImage: "https://img.example/person.jpg",
+    sourceUrl: "https://bgm.tv/person/123",
+    keyword: "Aoyama Yukari",
+    aliases: ["Aoyama Yukari", "Yukari"],
+    lastCheckStatus: "idle",
+    lastCheckedAt: null,
+    lastError: "",
+    lastNewItemCount: 0,
+  };
+  const searchSnapshots = [];
+
+  const repository = {
+    getLatestSyncRun: () => null,
+    getLatestActivitySyncRun: () => null,
+    getPersonSubscription: () => subscription,
+    savePersonSubscription: (payload) => {
+      subscription = { ...subscription, ...payload };
+      return subscription;
+    },
+    deletePersonSubscription: () => true,
+    listDuePersonSubscriptions: () => [subscription],
+    updatePersonSubscriptionCheck: (_personId, patch) => {
+      subscription = {
+        ...subscription,
+        lastCheckStatus: patch.status,
+        lastCheckedAt: patch.checkedAt,
+        lastError: patch.error,
+        lastResultCount: patch.resultCount,
+        lastNewItemCount: patch.newItemCount,
+      };
+      return subscription;
+    },
+    saveImportedWork: (work) => {
+      savedWorks.push(work);
+      return work.productId;
+    },
+    createPossibleNewWorkAlert: ({ personId, productId, fingerprint, message }) => {
+      const key = `${personId}:${productId}`;
+      if (alerts.has(key)) return false;
+      alerts.add(key);
+      savedWorks.push({ alertFingerprint: fingerprint, message });
+      return true;
+    },
+    getDashboardSummary: () => ({ totalWorks: 0, notableDrops: [] }),
+    getActivities: () => ({ items: [], activityMatches: { totalMatches: 0, claimsEntitlement: false }, personalSummary: { relatedWorks: { totalMatches: 0, claimsEntitlement: false } } }),
+    getAccountProfile: () => ({ hasSession: false, lists: {} }),
+    getRankings: () => ({ items: [] }),
+    getWorkHistory: () => null,
+    addWatchlist: () => ({}),
+    importWorkToWatchlist: () => ({}),
+    deleteWatchlist: () => true,
+    getWatchlist: () => [],
+    getWorkAnnotation: () => null,
+    saveWorkAnnotation: () => ({}),
+    deleteWorkAnnotation: () => true,
+    getAlerts: () => [],
+    markAlertRead: () => true,
+    markActivityAlertRead: () => true,
+    getAccountSyncState: () => ({ lists: {} }),
+    saveAccountSession: () => ({ hasSession: false, lists: {} }),
+    saveAccountSyncResult: () => ({ hasSession: false, lists: {} }),
+    clearAccountSession: () => ({ hasSession: false, lists: {} }),
+    getAffordableRecommendations: () => ({ items: [] }),
+    createSyncRun: () => ({ id: 1, status: "running" }),
+    updateSyncRun: () => ({}),
+    getSyncRun: () => null,
+    startActivitySync: () => ({}),
+  };
+
+  const searchHistoryRepository = {
+    getKnownPersonProductIds: () => [],
+    saveSearchSnapshot: (payload, metadata) => {
+      searchSnapshots.push({ payload, metadata });
+    },
+  };
+
+  const monitor = createDlsiteMonitor({
+    repository,
+    searchHistoryRepository,
+    searchAliasProgressive: async (alias) => ({
+      alias,
+      count: 1,
+      availableCount: 1,
+      pagesFetched: 1,
+      truncated: false,
+      floors: [{ key: "home", label: "鍏ㄥ勾榫?R15", count: 1, availableCount: 1, fetchedPages: 1, maxPages: 2, truncated: false }],
+      items: [
+        {
+          productId: "RJ900001",
+          title: "Fresh Voice",
+          url: "https://www.dlsite.com/home/work/=/product_id/RJ900001.html",
+          imageUrl: "https://img.example/fresh.jpg",
+          circle: "Local Circle",
+          circleUrl: "https://www.dlsite.com/home/circle/profile/=/maker_id/RG900.html",
+          floor: "home",
+          ageCategory: "general",
+          workType: "SOU",
+          categoryLabel: "ASMR",
+          genres: ["ASMR"],
+          priceJpy: 1200,
+          sales: 900,
+          ratingCount: 10,
+          matchedAliases: [alias],
+          matchedPages: [1],
+          verification: { status: "unknown", matchedAliases: [], fields: [] },
+        },
+      ],
+    }),
+    verifySearchItems: async (items) => {
+      items[0].verification = {
+        status: "matched",
+        matchedAliases: ["Aoyama Yukari"],
+        fields: ["CV"],
+      };
+      return items;
+    },
+  });
+
+  const first = await monitor.checkPersonSubscription(123);
+  const second = await monitor.checkPersonSubscription(123);
+
+  assert.equal(first.newAlertCount, 1);
+  assert.equal(second.newAlertCount, 0);
+  assert.equal(savedWorks.length >= 1, true);
+  assert.equal(searchSnapshots.length, 2);
+  assert.equal(searchSnapshots[0].payload.options.subscriptionCheck, true);
+  assert.equal(searchSnapshots[0].payload.person.name, "Aoyama Yukari");
+  assert.equal(searchSnapshots[0].payload.items[0].verification.status, "matched");
+  assert.equal(subscription.lastCheckStatus, "completed");
+});

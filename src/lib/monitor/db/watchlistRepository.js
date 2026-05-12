@@ -47,11 +47,19 @@ export function createWatchlistRepository({ db, statements, saveImportedWork }) 
     return db
       .prepare(
         `SELECT wl.*, w.title, w.url, w.image_url, w.circle, w.latest_price_jpy,
-                w.latest_official_price_jpy, w.latest_discount_rate
+                w.latest_official_price_jpy, w.latest_discount_rate,
+                wa.product_id AS annotation_product_id,
+                wa.note AS annotation_note,
+                wa.tags_json AS annotation_tags_json,
+                wa.status AS annotation_status,
+                wa.created_at AS annotation_created_at,
+                wa.updated_at AS annotation_updated_at
          FROM watchlist wl
          JOIN works w ON w.product_id = wl.product_id
          LEFT JOIN account_works owned
            ON owned.product_id = wl.product_id AND owned.list_type = 'collection'
+         LEFT JOIN work_annotations wa
+           ON wa.product_id = wl.product_id
          WHERE owned.product_id IS NULL
          ORDER BY wl.updated_at DESC`
       )

@@ -8,12 +8,15 @@ const state = {
   status: null,
   activityStatus: null,
   activities: null,
+  activityAlertSummary: null,
   account: null,
   recommendations: null,
+  bundleRecommendations: null,
   alerts: [],
   watchlist: [],
   refreshTimer: null,
   refreshInFlight: false,
+  dashboardNotificationKeys: new Set(),
 };
 
 const RUNNING_REFRESH_MS = 3000;
@@ -63,6 +66,8 @@ const els = {
   accountClearButton: document.querySelector("#accountClearButton"),
   recommendationCount: document.querySelector("#recommendationCount"),
   recommendationList: document.querySelector("#recommendationList"),
+  bundleCount: document.querySelector("#bundleCount"),
+  bundleList: document.querySelector("#bundleList"),
   watchCount: document.querySelector("#watchCount"),
   watchList: document.querySelector("#watchList"),
   dropList: document.querySelector("#dropList"),
@@ -75,8 +80,20 @@ const els = {
   rankTrendChart: document.querySelector("#rankTrendChart"),
   priceTrendEmpty: document.querySelector("#priceTrendEmpty"),
   rankTrendEmpty: document.querySelector("#rankTrendEmpty"),
+  annotationForm: document.querySelector("#annotationForm"),
+  annotationStatus: document.querySelector("#annotationStatus"),
+  annotationTags: document.querySelector("#annotationTags"),
+  annotationNote: document.querySelector("#annotationNote"),
+  saveAnnotationButton: document.querySelector("#saveAnnotationButton"),
+  deleteAnnotationButton: document.querySelector("#deleteAnnotationButton"),
   closeHistoryButton: document.querySelector("#closeHistoryButton"),
   toast: document.querySelector("#toast"),
+};
+
+const ANNOTATION_STATUS_LABELS = {
+  favorite: "神作",
+  owned: "已入",
+  planned: "待购",
 };
 
 const historyCharts = {
@@ -152,6 +169,31 @@ function escapeAttribute(value) {
   return escapeHtml(value).replaceAll("`", "&#096;");
 }
 
+function imageSource(item) {
+  return item?.cachedImageUrl || item?.imageUrl || "";
+}
+
+function imageFallbackAttribute(item) {
+  const primary = item?.cachedImageUrl || "";
+  const fallback = item?.imageUrl || item?.remoteImageUrl || "";
+  return primary && fallback && primary !== fallback ? ` data-fallback-src="${escapeAttribute(fallback)}"` : "";
+}
+
+function installImageFallbacks() {
+  document.addEventListener(
+    "error",
+    (event) => {
+      const image = event.target;
+      if (!image || image.tagName !== "IMG") return;
+      const fallback = image.dataset?.fallbackSrc;
+      if (!fallback) return;
+      image.removeAttribute("data-fallback-src");
+      image.src = fallback;
+    },
+    true
+  );
+}
+
 const activityUi = window.DlsiteActivityUi.createActivityUi({
   formatNumber,
   formatPrice,
@@ -162,6 +204,8 @@ const activityUi = window.DlsiteActivityUi.createActivityUi({
   relatedPreviewLimit: 2,
   detailFactLimit: 4,
 });
+
+installImageFallbacks();
 const {
   formatTimeLeft,
   formatActivityWindow,
@@ -245,7 +289,7 @@ function renderActivities() {
     node.className = "activity-card";
     node.innerHTML = `
       <a href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">
-        <img src="${escapeAttribute(item.imageUrl)}" alt="" loading="lazy" />
+        <img src="${escapeAttribute(imageSource(item))}"${imageFallbackAttribute(item)} alt="" loading="lazy" />
       </a>
       <div class="activity-card-body">
         <a class="activity-title" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
@@ -319,6 +363,42 @@ function historicalLowBadge(item) {
   return item?.isHistoricalLow ? '<span class="badge historical-low">史低</span>' : "";
 }
 
+function alertTypeBadge(alert) {
+  if (alert?.type === "possible_new_work") {
+    return '<span class="badge discovery">可能的新作</span>';
+  }
+  if (alert?.type === "target_price") {
+    return '<span class="badge discount">目标价</span>';
+  }
+  if (alert?.type === "price_drop") {
+    return '<span class="badge drop">降价</span>';
+  }
+  return "";
+}
+
+function annotationSummary(annotation) {
+  if (!annotation) return "";
+  const tags = Array.isArray(annotation.tags) ? annotation.tags : [];
+  const hasStatus = Boolean(annotation.status && ANNOTATION_STATUS_LABELS[annotation.status]);
+  const hasTags = tags.length > 0;
+  const hasNote = Boolean(annotation.note);
+  if (!hasStatus && !hasTags && !hasNote) return "";
+
+  const status = hasStatus
+    ? `<span class="badge annotation-status">${escapeHtml(ANNOTATION_STATUS_LABELS[annotation.status])}</span>`
+    : "";
+  const tagBadges = tags
+    .map((tag) => `<span class="badge annotation-tag">${escapeHtml(tag)}</span>`)
+    .join("");
+  const note = hasNote ? `<p class="annotation-note">${escapeHtml(annotation.note)}</p>` : "";
+  return `
+    <div class="annotation-summary">
+      <div class="muted-line">${status}${tagBadges}</div>
+      ${note}
+    </div>
+  `;
+}
+
 function renderRankingEmptyState(categoryLabel) {
   if (!syncIsRunning()) {
     els.rankingCaption.textContent = `还没有 ${categoryLabel} 快照数据。点击同步后会显示对应排行榜。`;
@@ -368,7 +448,7 @@ function renderRankings() {
       <td class="rank-cell">#${escapeHtml(item.latestRank)}</td>
       <td>
         <div class="work-cell">
-          <img src="${escapeAttribute(item.imageUrl)}" alt="" loading="lazy" />
+          <img src="${escapeAttribute(imageSource(item))}"${imageFallbackAttribute(item)} alt="" loading="lazy" />
           <div>
             <a class="work-title" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>
             <div class="muted-line">
@@ -413,11 +493,15 @@ function renderAlerts() {
     const node = document.createElement("article");
     node.className = "mini-work";
     node.innerHTML = `
-      <img src="${escapeAttribute(alert.imageUrl)}" alt="" loading="lazy" />
+      <img src="${escapeAttribute(imageSource(alert))}"${imageFallbackAttribute(alert)} alt="" loading="lazy" />
       <div>
         <strong>${escapeHtml(alert.title || alert.productId)}</strong>
         <p>${escapeHtml(alert.message)} · ${formatDate(alert.createdAt)}</p>
-        <div class="muted-line">${historicalLowBadge(alert)}</div>
+        <div class="muted-line">
+          ${alertTypeBadge(alert)}
+          ${alert.personId ? `<a class="mini-link" href="/person.html?id=${encodeURIComponent(alert.personId)}">${escapeHtml(alert.personName || "声优详情")}</a>` : ""}
+          ${historicalLowBadge(alert)}
+        </div>
         <div class="mini-actions">
           <button class="mini-button" data-action="read-alert" data-id="${escapeAttribute(alert.id)}" type="button">已读</button>
           <button class="mini-button" data-action="history" data-id="${escapeAttribute(alert.productId)}" type="button">历史</button>
@@ -441,13 +525,15 @@ function renderWatchlist() {
     node.className = "mini-work";
     node.innerHTML = `
       <a class="mini-thumb" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">
-        <img src="${escapeAttribute(item.imageUrl)}" alt="" loading="lazy" />
+        <img src="${escapeAttribute(imageSource(item))}"${imageFallbackAttribute(item)} alt="" loading="lazy" />
       </a>
       <div>
         <a class="mini-title" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title || item.productId)}</a>
         <p>当前 ${formatPrice(item.latestPriceJpy)}${item.targetPriceJpy ? ` · 目标 ${formatPrice(item.targetPriceJpy)}` : ""}</p>
+        ${annotationSummary(item.annotation)}
         <div class="mini-actions">
           <button class="mini-button" data-action="watch" data-id="${escapeAttribute(item.productId)}" data-price="${escapeAttribute(item.latestPriceJpy)}" type="button">目标价</button>
+          <button class="mini-button" data-action="annotate" data-id="${escapeAttribute(item.productId)}" type="button">标注</button>
           <button class="mini-button" data-action="unwatch" data-id="${escapeAttribute(item.productId)}" type="button">移除</button>
         </div>
       </div>
@@ -469,7 +555,7 @@ function renderDrops() {
     node.className = "mini-work";
     node.innerHTML = `
       <a class="mini-thumb" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">
-        <img src="${escapeAttribute(item.imageUrl)}" alt="" loading="lazy" />
+        <img src="${escapeAttribute(imageSource(item))}"${imageFallbackAttribute(item)} alt="" loading="lazy" />
       </a>
       <div>
         <a class="mini-title" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title || item.productId)}</a>
@@ -535,7 +621,7 @@ function renderRecommendations() {
     const node = document.createElement("article");
     node.className = "mini-work recommendation";
     node.innerHTML = `
-      <img src="${escapeAttribute(item.imageUrl)}" alt="" loading="lazy" />
+      <img src="${escapeAttribute(imageSource(item))}"${imageFallbackAttribute(item)} alt="" loading="lazy" />
       <div>
         <a class="mini-title" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title || item.productId)}</a>
         <p>${formatPrice(item.latestPriceJpy)} · 热度 ${escapeHtml(item.popularityScore)} · 实惠 ${escapeHtml(item.valueScore)}</p>
@@ -543,6 +629,44 @@ function renderRecommendations() {
       </div>
     `;
     els.recommendationList.append(node);
+  }
+}
+
+function renderBundleRecommendations() {
+  const bundles = state.bundleRecommendations?.items ?? [];
+  els.bundleCount.textContent = String(bundles.length);
+  els.bundleList.innerHTML = "";
+
+  if (!state.account?.hasSession) {
+    els.bundleList.innerHTML = '<div class="empty">连接账号后显示同社团组合。</div>';
+    return;
+  }
+
+  if (!bundles.length) {
+    els.bundleList.innerHTML = '<div class="empty">当前点数下暂无同社团预算组合。</div>';
+    return;
+  }
+
+  for (const bundle of bundles) {
+    const node = document.createElement("article");
+    node.className = "bundle-recommendation";
+    const titles = (bundle.items ?? [])
+      .slice(0, 3)
+      .map((item) => item.title || item.productId)
+      .join(" / ");
+    node.innerHTML = `
+      <div class="bundle-summary">
+        <strong>${escapeHtml(bundle.circle || "未知社团")}</strong>
+        <span>${escapeHtml(bundle.itemCount)} 件 · ${formatPrice(bundle.totalPriceJpy)}</span>
+      </div>
+      <p>${escapeHtml(titles)}</p>
+      <div class="muted-line">
+        <span class="badge">余量 ${formatPrice(bundle.leftoverJpy)}</span>
+        ${bundle.discountRate ? `<span class="badge">${escapeHtml(bundle.discountRate)}%OFF</span>` : ""}
+        <span class="badge">非结算最优声明</span>
+      </div>
+    `;
+    els.bundleList.append(node);
   }
 }
 
@@ -614,11 +738,21 @@ function renderHistoryChart(key, { canvas, empty, points, label, color, reverseY
   });
 }
 
+function renderHistoryAnnotation(annotation = {}) {
+  const productId = annotation.productId || els.historyPanel?.dataset?.productId || "";
+  els.annotationForm.dataset.productId = productId;
+  els.annotationStatus.value = annotation.status || "";
+  els.annotationTags.value = Array.isArray(annotation.tags) ? annotation.tags.join(", ") : "";
+  els.annotationNote.value = annotation.note || "";
+}
+
 function renderHistory(payload) {
   els.historyPanel.hidden = false;
+  els.historyPanel.dataset.productId = payload.work.productId;
   els.historyTitle.textContent = payload.work.title || payload.work.productId;
   els.historyMeta.textContent = `${payload.work.productId} · ${payload.work.circle || "未知社团"}`;
   const priceSummary = payload.priceSummary ?? {};
+  renderHistoryAnnotation(payload.annotation ?? payload.work.annotation ?? { productId: payload.work.productId });
 
   renderHistoryChart("price", {
     canvas: els.priceTrendChart,
@@ -692,6 +826,7 @@ function renderAll() {
   renderAlerts();
   renderAccount();
   renderRecommendations();
+  renderBundleRecommendations();
   renderWatchlist();
   renderDrops();
 }
@@ -712,6 +847,36 @@ function scheduleNextRefresh() {
   scheduleRefresh(syncIsRunning() ? RUNNING_REFRESH_MS : IDLE_REFRESH_MS);
 }
 
+function dashboardNotificationItems() {
+  const priceAlerts = (state.alerts ?? [])
+    .filter((alert) => alert.status === "unread" || state.alertsStatus === "unread")
+    .map((alert) => ({
+      key: `price:${alert.id || alert.type || "alert"}:${alert.productId || ""}`,
+      title: alert.type === "possible_new_work" ? "KoeScope 新作提醒" : "KoeScope 价格提醒",
+      body: alert.message || alert.title || alert.productId || "有新的 KoeScope 提醒。",
+    }));
+  const activityAlerts = (state.activityAlertSummary?.items ?? []).map((alert) => ({
+    key: `activity:${alert.id || alert.activityId || "activity"}:${alert.type || ""}`,
+    title: "KoeScope 活动提醒",
+    body: alert.message || alert.activityTitle || "有新的 DLsite 活动提醒。",
+  }));
+  return [...priceAlerts, ...activityAlerts];
+}
+
+function notifyDashboardUnread() {
+  const NotificationConstructor = window.Notification;
+  if (typeof NotificationConstructor !== "function" || NotificationConstructor.permission !== "granted") return;
+
+  for (const item of dashboardNotificationItems().slice(0, 4)) {
+    if (state.dashboardNotificationKeys.has(item.key)) continue;
+    state.dashboardNotificationKeys.add(item.key);
+    new NotificationConstructor(item.title, {
+      body: item.body,
+      tag: item.key,
+    });
+  }
+}
+
 async function refreshAll() {
   if (state.refreshInFlight) {
     scheduleRefresh(syncIsRunning() ? RUNNING_REFRESH_MS : 1000);
@@ -720,27 +885,44 @@ async function refreshAll() {
   state.refreshInFlight = true;
 
   try {
-  const [summary, status, activityStatus, activities, ranking, alerts, watchlist, account, recommendations] = await Promise.all([
-    getJson("/api/dashboard/summary"),
-    getJson("/api/sync/status"),
-    getJson("/api/activities/status"),
-    getJson("/api/activities?status=active&benefit=all&limit=3"),
-    getJson(`/api/rankings?floor=${encodeURIComponent(state.floor)}&period=${encodeURIComponent(state.period)}&category=${encodeURIComponent(state.category)}`),
-    getJson(`/api/alerts?status=${encodeURIComponent(state.alertsStatus)}`),
-    getJson("/api/watchlist"),
-    getJson("/api/account/dlsite"),
-    getJson("/api/recommendations/affordable?limit=8"),
-  ]);
-  state.summary = summary;
-  state.status = status;
-  state.activityStatus = activityStatus;
-  state.activities = activities;
-  state.ranking = ranking;
-  state.alerts = alerts.items ?? [];
-  state.watchlist = watchlist.items ?? [];
-  state.account = account;
-  state.recommendations = recommendations;
-  renderAll();
+    const [
+      summary,
+      status,
+      activityStatus,
+      activities,
+      activityAlertSummary,
+      ranking,
+      alerts,
+      watchlist,
+      account,
+      recommendations,
+      bundleRecommendations,
+    ] = await Promise.all([
+      getJson("/api/dashboard/summary"),
+      getJson("/api/sync/status"),
+      getJson("/api/activities/status"),
+      getJson("/api/activities?status=active&benefit=all&limit=3"),
+      getJson("/api/activity-alerts/summary?limit=5"),
+      getJson(`/api/rankings?floor=${encodeURIComponent(state.floor)}&period=${encodeURIComponent(state.period)}&category=${encodeURIComponent(state.category)}`),
+      getJson(`/api/alerts?status=${encodeURIComponent(state.alertsStatus)}&limit=50`),
+      getJson("/api/watchlist"),
+      getJson("/api/account/dlsite"),
+      getJson("/api/recommendations/affordable?limit=8"),
+      getJson("/api/recommendations/bundles?limit=4"),
+    ]);
+    state.summary = summary;
+    state.status = status;
+    state.activityStatus = activityStatus;
+    state.activities = activities;
+    state.activityAlertSummary = activityAlertSummary;
+    state.ranking = ranking;
+    state.alerts = alerts.items ?? [];
+    state.watchlist = watchlist.items ?? [];
+    state.account = account;
+    state.recommendations = recommendations;
+    state.bundleRecommendations = bundleRecommendations;
+    renderAll();
+    notifyDashboardUnread();
   } catch (error) {
     toast(error.message);
     renderAll();
@@ -832,6 +1014,44 @@ async function removeWatch(productId) {
   }
 }
 
+async function saveHistoryAnnotation(event) {
+  event.preventDefault();
+  const productId = els.annotationForm.dataset.productId;
+  if (!productId) return;
+  try {
+    const annotation = await sendJson(
+      `/api/works/${encodeURIComponent(productId)}/annotation`,
+      {
+        status: els.annotationStatus.value,
+        tags: els.annotationTags.value
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+        note: els.annotationNote.value,
+      },
+      "PUT"
+    );
+    renderHistoryAnnotation(annotation);
+    toast("本地标注已保存。");
+    await refreshAll();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function deleteHistoryAnnotation() {
+  const productId = els.annotationForm.dataset.productId;
+  if (!productId) return;
+  try {
+    const payload = await sendJson(`/api/works/${encodeURIComponent(productId)}/annotation`, {}, "DELETE");
+    renderHistoryAnnotation(payload.annotation ?? { productId });
+    toast("本地标注已清空。");
+    await refreshAll();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
 async function markAlertRead(id) {
   try {
     await sendJson(`/api/alerts/${encodeURIComponent(id)}/read`);
@@ -850,9 +1070,10 @@ async function markActivityAlertRead(id) {
   }
 }
 
-async function showHistory(productId) {
+async function showHistory(productId, { focusAnnotation = false } = {}) {
   try {
     renderHistory(await getJson(`/api/works/${encodeURIComponent(productId)}/history`));
+    if (focusAnnotation) els.annotationNote.focus?.();
   } catch (error) {
     toast(error.message);
   }
@@ -865,6 +1086,7 @@ function handleAction(event) {
   const id = button.dataset.id;
   if (action === "watch") addOrUpdateWatch(id, button.dataset.price);
   if (action === "unwatch") removeWatch(id);
+  if (action === "annotate") showHistory(id, { focusAnnotation: true });
   if (action === "read-alert") markAlertRead(id);
   if (action === "read-activity-alert") markActivityAlertRead(id);
   if (action === "history") showHistory(id);
@@ -891,6 +1113,8 @@ els.showAllAlertsButton.addEventListener("click", async () => {
 });
 els.accountSyncButton.addEventListener("click", syncAccount);
 els.accountClearButton.addEventListener("click", clearAccountSession);
+els.annotationForm.addEventListener("submit", saveHistoryAnnotation);
+els.deleteAnnotationButton.addEventListener("click", deleteHistoryAnnotation);
 els.closeHistoryButton.addEventListener("click", closeHistory);
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !els.historyPanel.hidden) closeHistory();

@@ -99,6 +99,18 @@ export function migrateMonitorDatabase(db) {
     CREATE INDEX IF NOT EXISTS idx_watchlist_updated
       ON watchlist(updated_at DESC, product_id);
 
+    CREATE TABLE IF NOT EXISTS work_annotations (
+      product_id TEXT PRIMARY KEY,
+      note TEXT NOT NULL DEFAULT '',
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      status TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_work_annotations_status_updated
+      ON work_annotations(status, updated_at DESC, product_id);
+
     CREATE TABLE IF NOT EXISTS alerts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       product_id TEXT NOT NULL REFERENCES works(product_id) ON DELETE CASCADE,
@@ -110,6 +122,9 @@ export function migrateMonitorDatabase(db) {
       status TEXT NOT NULL DEFAULT 'unread',
       created_at TEXT NOT NULL,
       source_run_id INTEGER REFERENCES sync_runs(id) ON DELETE SET NULL,
+      person_id INTEGER,
+      person_name TEXT,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
       fingerprint TEXT NOT NULL UNIQUE
     );
 
@@ -250,6 +265,29 @@ export function migrateMonitorDatabase(db) {
 
     CREATE INDEX IF NOT EXISTS idx_activity_alerts_status_created
       ON activity_alerts(status, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS person_subscriptions (
+      person_id INTEGER PRIMARY KEY,
+      person_name TEXT NOT NULL,
+      person_image TEXT,
+      source_url TEXT,
+      keyword TEXT NOT NULL DEFAULT '',
+      aliases_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      last_checked_at TEXT,
+      last_successful_check_at TEXT,
+      last_check_status TEXT NOT NULL DEFAULT 'idle',
+      last_error TEXT NOT NULL DEFAULT '',
+      last_result_count INTEGER NOT NULL DEFAULT 0,
+      last_new_item_count INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_person_subscriptions_updated
+      ON person_subscriptions(updated_at DESC, person_id);
+
+    CREATE INDEX IF NOT EXISTS idx_person_subscriptions_checked
+      ON person_subscriptions(last_checked_at ASC, person_id);
   `);
 
   db.exec(`
@@ -286,6 +324,41 @@ export function migrateMonitorDatabase(db) {
   for (const [columnName, definition] of activityColumnMigrations) {
     if (!activityColumns.has(columnName)) {
       db.exec(`ALTER TABLE activities ADD COLUMN ${columnName} ${definition}`);
+    }
+  }
+
+  const alertColumns = new Set(
+    db.prepare("PRAGMA table_info(alerts)").all().map((column) => column.name)
+  );
+  const alertColumnMigrations = [
+    ["person_id", "INTEGER"],
+    ["person_name", "TEXT"],
+    ["metadata_json", "TEXT NOT NULL DEFAULT '{}'"],
+  ];
+  for (const [columnName, definition] of alertColumnMigrations) {
+    if (!alertColumns.has(columnName)) {
+      db.exec(`ALTER TABLE alerts ADD COLUMN ${columnName} ${definition}`);
+    }
+  }
+
+  const personSubscriptionColumns = new Set(
+    db.prepare("PRAGMA table_info(person_subscriptions)").all().map((column) => column.name)
+  );
+  const personSubscriptionMigrations = [
+    ["person_image", "TEXT"],
+    ["source_url", "TEXT"],
+    ["keyword", "TEXT NOT NULL DEFAULT ''"],
+    ["aliases_json", "TEXT NOT NULL DEFAULT '[]'"],
+    ["last_checked_at", "TEXT"],
+    ["last_successful_check_at", "TEXT"],
+    ["last_check_status", "TEXT NOT NULL DEFAULT 'idle'"],
+    ["last_error", "TEXT NOT NULL DEFAULT ''"],
+    ["last_result_count", "INTEGER NOT NULL DEFAULT 0"],
+    ["last_new_item_count", "INTEGER NOT NULL DEFAULT 0"],
+  ];
+  for (const [columnName, definition] of personSubscriptionMigrations) {
+    if (!personSubscriptionColumns.has(columnName)) {
+      db.exec(`ALTER TABLE person_subscriptions ADD COLUMN ${columnName} ${definition}`);
     }
   }
 }

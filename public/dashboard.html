@@ -6,6 +6,7 @@
     <title>KoeScope Monitor</title>
     <link rel="icon" href="/assets/koescope-icon-32.png" type="image/png" />
     <link rel="apple-touch-icon" href="/assets/koescope-icon-256.png" />
+    <script src="/theme.js"></script>
     <link rel="stylesheet" href="/dashboard.css" />
   </head>
   <body>
@@ -17,6 +18,7 @@
       </div>
       <nav class="top-actions" aria-label="页面操作">
         <a class="link-action" href="/">返回 KoeScope 搜索</a>
+        <button class="theme-toggle" data-theme-toggle type="button" aria-pressed="false">Dark</button>
         <button class="primary-action" id="syncButton" type="button">同步</button>
         <span class="status-pill" id="syncStatus">读取中</span>
       </nav>
@@ -151,6 +153,14 @@
 
           <section class="side-section">
             <div class="section-head compact">
+              <h2>组合建议</h2>
+              <span id="bundleCount">0</span>
+            </div>
+            <div class="bundle-list" id="bundleList"></div>
+          </section>
+
+          <section class="side-section">
+            <div class="section-head compact">
               <h2>提醒</h2>
               <button class="text-action" id="showAllAlertsButton" type="button">全部</button>
             </div>
@@ -182,6 +192,31 @@
           </div>
           <button class="text-action" id="closeHistoryButton" type="button">关闭</button>
         </div>
+        <form class="annotation-editor" id="annotationForm">
+          <div class="annotation-fields">
+            <label>
+              <span>状态</span>
+              <select id="annotationStatus">
+                <option value="">未设置</option>
+                <option value="favorite">神作</option>
+                <option value="owned">已入</option>
+                <option value="planned">待购</option>
+              </select>
+            </label>
+            <label>
+              <span>标签</span>
+              <input id="annotationTags" type="text" autocomplete="off" placeholder="ASMR, sale" />
+            </label>
+          </div>
+          <label class="annotation-note-field">
+            <span>备注</span>
+            <textarea id="annotationNote" rows="3" maxlength="1000"></textarea>
+          </label>
+          <div class="mini-actions">
+            <button class="mini-button primary" id="saveAnnotationButton" type="submit">保存标注</button>
+            <button class="mini-button" id="deleteAnnotationButton" type="button">清空</button>
+          </div>
+        </form>
         <div class="history-grid">
           <div>
             <h3>价格快照</h3>

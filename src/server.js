@@ -10,8 +10,8 @@ import {
 } from "./lib/dlsite.js";
 import { normalizeSpace } from "./lib/cache.js";
 import { createDlsiteMonitor } from "./lib/monitor/service.js";
-import { createSearchJobStore } from "./lib/searchJobs.js";
 import { createSearchHistoryRepository } from "./lib/searchHistoryRepository.js";
+import { createSearchJobStore } from "./lib/searchJobs.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -81,6 +81,10 @@ function readRankingCategory(value) {
 
 function readAlertStatus(value) {
   return value === "all" ? "all" : "unread";
+}
+
+function readAlertLimit(value) {
+  return Math.min(Math.max(Number(value) || 50, 1), 100);
 }
 
 function readActivityStatus(value) {
@@ -158,11 +162,11 @@ function readPersonWorkLimit(value) {
   return Math.min(Math.max(Number(value) || 100, 1), 300);
 }
 
-export function createApp({
-  monitor = createDlsiteMonitor(),
-  searchHistory = createSearchHistoryRepository(),
-  searchJobStore = createSearchJobStore({ searchHistoryRepository: searchHistory }),
-} = {}) {
+export function createApp({ monitor = null, searchHistory = null, searchJobStore = null } = {}) {
+  const resolvedSearchHistory = searchHistory ?? createSearchHistoryRepository();
+  const resolvedMonitor = monitor ?? createDlsiteMonitor({ searchHistoryRepository: resolvedSearchHistory });
+  const resolvedSearchJobStore =
+    searchJobStore ?? createSearchJobStore({ searchHistoryRepository: resolvedSearchHistory });
   const app = express();
 
   app.use(express.json({ limit: "5mb" }));
@@ -215,7 +219,7 @@ export function createApp({
         perPage,
       };
 
-      const payload = searchJobStore.create({
+      const payload = resolvedSearchJobStore.create({
         keyword,
         person,
         selectedAliasValues,
@@ -228,7 +232,7 @@ export function createApp({
   app.get(
     "/api/search/progressive/:id",
     asyncHandler(async (req, res) => {
-      const payload = searchJobStore.get(req.params.id);
+      const payload = resolvedSearchJobStore.get(req.params.id);
       if (!payload) return res.status(404).json({ error: "搜索任务不存在或已过期。" });
       res.json(payload);
     })
@@ -236,7 +240,7 @@ export function createApp({
 
   app.get("/api/search/history", (req, res) => {
     res.json(
-      searchHistory.listSearches({
+      resolvedSearchHistory.listSearches({
         limit: readSearchHistoryLimit(req.query.limit),
         personId: req.query.personId,
         keyword: normalizeSpace(req.query.keyword),
@@ -250,7 +254,7 @@ export function createApp({
   app.get(
     "/api/search/history/:id",
     asyncHandler(async (req, res) => {
-      const payload = searchHistory.getSearch(req.params.id);
+      const payload = resolvedSearchHistory.getSearch(req.params.id);
       if (!payload) return res.status(404).json({ error: "Search history not found." });
       res.json(payload);
     })
@@ -258,7 +262,7 @@ export function createApp({
 
   app.get("/api/persons/:id/searches", (req, res) => {
     res.json(
-      searchHistory.getPersonSearches(req.params.id, {
+      resolvedSearchHistory.getPersonSearches(req.params.id, {
         limit: readSearchHistoryLimit(req.query.limit),
         keyword: normalizeSpace(req.query.keyword),
         aliases: readSearchHistoryAliases(req.query.aliases ?? req.query.alias),
@@ -271,7 +275,7 @@ export function createApp({
   app.get(
     "/api/persons/:id/profile",
     asyncHandler(async (req, res) => {
-      const payload = searchHistory.getPersonProfile(req.params.id, {
+      const payload = resolvedSearchHistory.getPersonProfile(req.params.id, {
         recentLimit: readSearchHistoryLimit(req.query.limit),
       });
       if (!payload) return res.status(404).json({ error: "本地搜索历史中还没有这个人物。" });
@@ -282,7 +286,7 @@ export function createApp({
   app.get(
     "/api/persons/:id/works",
     asyncHandler(async (req, res) => {
-      const payload = searchHistory.getPersonWorks(req.params.id, {
+      const payload = resolvedSearchHistory.getPersonWorks(req.params.id, {
         sort: readPersonWorkSort(req.query.sort),
         type: readPersonWorkType(req.query.type),
         age: readPersonWorkAge(req.query.age),
@@ -294,10 +298,41 @@ export function createApp({
     })
   );
 
+  app.put(
+    "/api/persons/:id/subscription",
+    asyncHandler(async (req, res) => {
+      res.json(
+        resolvedMonitor.savePersonSubscription({
+          personId: req.params.id,
+          personName: req.body?.personName,
+          personImage: req.body?.personImage,
+          sourceUrl: req.body?.sourceUrl,
+          keyword: req.body?.keyword,
+          aliases: req.body?.aliases,
+        })
+      );
+    })
+  );
+
+  app.delete("/api/persons/:id/subscription", (req, res) => {
+    const deleted = resolvedMonitor.deletePersonSubscription(req.params.id);
+    res.json({ ok: true, deleted });
+  });
+
+  app.post(
+    "/api/persons/:id/subscription/check",
+    asyncHandler(async (req, res) => {
+      const payload = await resolvedMonitor.checkPersonSubscription(req.params.id, {
+        reason: req.body?.reason || "manual",
+      });
+      res.json(payload);
+    })
+  );
+
   app.post(
     "/api/sync/dlsite-rankings",
     asyncHandler(async (req, res) => {
-      const payload = monitor.startSync({
+      const payload = resolvedMonitor.startSync({
         reason: "manual",
         priority: req.body?.priority ?? null,
       });
@@ -306,13 +341,13 @@ export function createApp({
   );
 
   app.get("/api/sync/status", (_req, res) => {
-    res.json(monitor.getStatus());
+    res.json(resolvedMonitor.getStatus());
   });
 
   app.post(
     "/api/sync/dlsite-activities",
     asyncHandler(async (req, res) => {
-      const payload = monitor.startActivitySync({
+      const payload = resolvedMonitor.startActivitySync({
         reason: req.body?.reason || "manual",
       });
       res.status(payload.alreadyRunning ? 200 : 202).json(payload);
@@ -320,16 +355,16 @@ export function createApp({
   );
 
   app.get("/api/activities/status", (_req, res) => {
-    res.json(monitor.getActivityStatus());
+    res.json(resolvedMonitor.getActivityStatus());
   });
 
   app.get("/api/dashboard/summary", (_req, res) => {
-    res.json(monitor.getDashboardSummary());
+    res.json(resolvedMonitor.getDashboardSummary());
   });
 
   app.get("/api/activity-alerts/summary", (req, res) => {
     res.json(
-      monitor.getActivityAlertSummary({
+      resolvedMonitor.getActivityAlertSummary({
         limit: readActivityAlertSummaryLimit(req.query.limit),
       })
     );
@@ -337,7 +372,7 @@ export function createApp({
 
   app.get("/api/activities", (req, res) => {
     res.json(
-      monitor.getActivities({
+      resolvedMonitor.getActivities({
         status: readActivityStatus(req.query.status),
         benefit: readActivityBenefit(req.query.benefit),
         limit: readActivityLimit(req.query.limit),
@@ -349,7 +384,7 @@ export function createApp({
 
   app.get("/api/rankings", (req, res) => {
     res.json(
-      monitor.getRankings({
+      resolvedMonitor.getRankings({
         floor: readRankingFloor(req.query.floor),
         period: readRankingPeriod(req.query.period),
         category: readRankingCategory(req.query.category),
@@ -360,7 +395,7 @@ export function createApp({
   app.get(
     "/api/works/:id/history",
     asyncHandler(async (req, res) => {
-      const payload = monitor.getWorkHistory(req.params.id);
+      const payload = resolvedMonitor.getWorkHistory(req.params.id);
       if (!payload) return res.status(404).json({ error: "作品尚未同步。" });
       res.json(payload);
     })
@@ -372,7 +407,7 @@ export function createApp({
       const productId = normalizeSpace(req.body.productId);
       if (!productId) return res.status(400).json({ error: "productId is required." });
       res.status(201).json(
-        monitor.addWatchlist({
+        resolvedMonitor.addWatchlist({
           productId,
           targetPriceJpy: req.body.targetPriceJpy,
           note: req.body.note,
@@ -388,7 +423,7 @@ export function createApp({
       const productId = normalizeSpace(work.productId ?? req.body.productId);
       if (!productId) return res.status(400).json({ error: "productId is required." });
       res.status(201).json(
-        monitor.importWorkToWatchlist({
+        resolvedMonitor.importWorkToWatchlist({
           work: {
             ...work,
             productId,
@@ -401,47 +436,75 @@ export function createApp({
   );
 
   app.delete("/api/watchlist/:id", (req, res) => {
-    const deleted = monitor.deleteWatchlist(req.params.id);
+    const deleted = resolvedMonitor.deleteWatchlist(req.params.id);
     res.json({ ok: true, deleted });
   });
 
   app.get("/api/watchlist", (_req, res) => {
-    res.json({ items: monitor.getWatchlist() });
+    res.json({ items: resolvedMonitor.getWatchlist() });
+  });
+
+  app.get("/api/works/:id/annotation", (req, res) => {
+    res.json(resolvedMonitor.getWorkAnnotation(req.params.id));
+  });
+
+  app.put(
+    "/api/works/:id/annotation",
+    asyncHandler(async (req, res) => {
+      res.json(
+        resolvedMonitor.saveWorkAnnotation({
+          productId: req.params.id,
+          note: req.body?.note,
+          tags: req.body?.tags,
+          status: req.body?.status,
+        })
+      );
+    })
+  );
+
+  app.delete("/api/works/:id/annotation", (req, res) => {
+    const deleted = resolvedMonitor.deleteWorkAnnotation(req.params.id);
+    res.json({ ok: true, deleted, annotation: resolvedMonitor.getWorkAnnotation(req.params.id) });
   });
 
   app.get("/api/alerts", (req, res) => {
-    res.json({ items: monitor.getAlerts({ status: readAlertStatus(req.query.status) }) });
+    res.json({
+      items: resolvedMonitor.getAlerts({
+        status: readAlertStatus(req.query.status),
+        limit: readAlertLimit(req.query.limit),
+      }),
+    });
   });
 
   app.post("/api/alerts/:id/read", (req, res) => {
-    const updated = monitor.markAlertRead(req.params.id);
+    const updated = resolvedMonitor.markAlertRead(req.params.id);
     res.json({ ok: true, updated });
   });
 
   app.post("/api/activity-alerts/:id/read", (req, res) => {
-    const updated = monitor.markActivityAlertRead(req.params.id);
+    const updated = resolvedMonitor.markActivityAlertRead(req.params.id);
     res.json({ ok: true, updated });
   });
 
   app.get("/api/account/dlsite", (_req, res) => {
-    res.json(monitor.getAccountProfile());
+    res.json(resolvedMonitor.getAccountProfile());
   });
 
   app.get("/api/account/dlsite/sync-state", (_req, res) => {
-    res.json(monitor.getAccountSyncState());
+    res.json(resolvedMonitor.getAccountSyncState());
   });
 
   app.post(
     "/api/account/dlsite/session",
     asyncHandler(async (req, res) => {
-      const profile = monitor.saveAccountSession({
+      const profile = resolvedMonitor.saveAccountSession({
         cookieHeader: req.body.cookieHeader,
         loginState: "pending",
       });
 
       if (req.body.syncNow === false) return res.status(201).json({ profile });
 
-      const payload = await monitor.syncAccount({ maxPages: readAccountMaxPages(req.body.maxPages) });
+      const payload = await resolvedMonitor.syncAccount({ maxPages: readAccountMaxPages(req.body.maxPages) });
       res.status(201).json(payload);
     })
   );
@@ -449,7 +512,7 @@ export function createApp({
   app.post(
     "/api/account/dlsite/sync",
     asyncHandler(async (req, res) => {
-      const payload = await monitor.syncAccount({ maxPages: readAccountMaxPages(req.body?.maxPages) });
+      const payload = await resolvedMonitor.syncAccount({ maxPages: readAccountMaxPages(req.body?.maxPages) });
       res.json(payload);
     })
   );
@@ -457,7 +520,7 @@ export function createApp({
   app.post(
     "/api/account/dlsite/import-pages",
     asyncHandler(async (req, res) => {
-      const payload = monitor.importAccountPages({
+      const payload = resolvedMonitor.importAccountPages({
         pages: req.body?.pages,
         syncMode: readAccountSyncMode(req.body?.syncMode),
       });
@@ -466,12 +529,22 @@ export function createApp({
   );
 
   app.delete("/api/account/dlsite/session", (_req, res) => {
-    res.json({ ok: true, profile: monitor.clearAccountSession() });
+    res.json({ ok: true, profile: resolvedMonitor.clearAccountSession() });
   });
 
   app.get("/api/recommendations/affordable", (req, res) => {
     res.json(
-      monitor.getAffordableRecommendations({
+      resolvedMonitor.getAffordableRecommendations({
+        budgetJpy: req.query.budgetJpy,
+        limit: readRecommendationLimit(req.query.limit),
+        excludeCollection: req.query.excludeCollection !== "0",
+      })
+    );
+  });
+
+  app.get("/api/recommendations/bundles", (req, res) => {
+    res.json(
+      resolvedMonitor.getBundleRecommendations({
         budgetJpy: req.query.budgetJpy,
         limit: readRecommendationLimit(req.query.limit),
         excludeCollection: req.query.excludeCollection !== "0",
@@ -491,8 +564,9 @@ export function createApp({
 }
 
 export function startServer({ port = Number(process.env.PORT) || 5178 } = {}) {
-  const monitor = createDlsiteMonitor();
-  const app = createApp({ monitor });
+  const searchHistory = createSearchHistoryRepository();
+  const monitor = createDlsiteMonitor({ searchHistoryRepository: searchHistory });
+  const app = createApp({ monitor, searchHistory });
   monitor.startDailyScheduler();
   return app.listen(port, () => {
     console.log(`KoeScope is running at http://localhost:${port}`);

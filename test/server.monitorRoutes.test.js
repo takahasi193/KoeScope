@@ -3,6 +3,8 @@ import test from "node:test";
 import { createApp } from "../src/server.js";
 
 function createMockMonitor() {
+  let annotation = { note: "", tags: [], status: "", createdAt: null, updatedAt: null };
+  let subscription = null;
   return {
     startSync: () => ({ alreadyRunning: false, run: { id: 1, status: "running" } }),
     startActivitySync: () => ({ alreadyRunning: false, run: { id: 2, status: "running" } }),
@@ -54,6 +56,52 @@ function createMockMonitor() {
     importWorkToWatchlist: ({ work }) => ({ productId: work.productId, targetPriceJpy: null }),
     deleteWatchlist: () => true,
     getWatchlist: () => [],
+    getWorkAnnotation: (productId) => ({ productId: String(productId).toUpperCase(), ...annotation }),
+    saveWorkAnnotation: ({ productId, note, tags, status }) => {
+      annotation = {
+        note: String(note ?? "").trim(),
+        tags: Array.isArray(tags) ? tags : [],
+        status: status || "",
+        createdAt: "2026-05-10T00:00:00.000Z",
+        updatedAt: "2026-05-10T00:00:00.000Z",
+      };
+      return { productId: String(productId).toUpperCase(), ...annotation };
+    },
+    deleteWorkAnnotation: () => {
+      annotation = { note: "", tags: [], status: "", createdAt: null, updatedAt: null };
+      return true;
+    },
+    getPersonSubscription: () => subscription,
+    savePersonSubscription: ({ personId, personName, aliases = [], keyword = "" }) => {
+      subscription = {
+        personId: Number(personId),
+        personName,
+        aliases,
+        keyword,
+        lastCheckStatus: "idle",
+        lastCheckedAt: null,
+        lastError: "",
+        lastNewItemCount: 0,
+      };
+      return subscription;
+    },
+    deletePersonSubscription: () => {
+      const hadSubscription = Boolean(subscription);
+      subscription = null;
+      return hadSubscription;
+    },
+    checkPersonSubscription: async (personId) => ({
+      personId: Number(personId),
+      newAlertCount: 1,
+      resultCount: 2,
+      newItems: [{ productId: "RJ200001", title: "Fresh Voice" }],
+      subscription: {
+        ...(subscription ?? { personId: Number(personId), personName: "Aoyama Yukari", aliases: ["Aoyama Yukari"] }),
+        lastCheckStatus: "completed",
+        lastCheckedAt: "2026-05-12T00:00:00.000Z",
+        lastNewItemCount: 1,
+      },
+    }),
     getAlerts: () => [],
     markAlertRead: () => true,
     markActivityAlertRead: () => true,
@@ -64,6 +112,11 @@ function createMockMonitor() {
     importAccountPages: () => ({ profile: { hasSession: true, pointsJpy: 1000, lists: {} }, lists: [] }),
     clearAccountSession: () => ({ hasSession: false, pointsJpy: null, lists: {} }),
     getAffordableRecommendations: () => ({ budgetJpy: 1000, items: [] }),
+    getBundleRecommendations: () => ({
+      budgetJpy: 1000,
+      items: [{ circle: "Local Circle", totalPriceJpy: 900, itemCount: 2, claimsCheckoutOptimization: false }],
+      disclaimer: "Local public-price analysis only.",
+    }),
   };
 }
 
@@ -72,6 +125,8 @@ function createMockSearchHistory() {
     listSearches: () => ({ items: [] }),
     getSearch: () => null,
     getPersonSearches: () => ({ items: [] }),
+    getPersonProfile: () => null,
+    getPersonWorks: () => null,
   };
 }
 
@@ -151,6 +206,48 @@ test("monitor routes expose sync, summary, rankings, and alerts", async () => {
     assert.equal(imported.status, 201);
     assert.equal((await imported.json()).productId, "RJ100001");
 
+    const savedAnnotation = await fetch(`${baseUrl}/api/works/rj100001/annotation`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "planned", tags: ["ASMR", "sale"], note: " local note " }),
+    });
+    assert.equal(savedAnnotation.status, 200);
+    const savedAnnotationPayload = await savedAnnotation.json();
+    assert.equal(savedAnnotationPayload.productId, "RJ100001");
+    assert.equal(savedAnnotationPayload.status, "planned");
+    assert.deepEqual(savedAnnotationPayload.tags, ["ASMR", "sale"]);
+    assert.equal(savedAnnotationPayload.note, "local note");
+
+    const savedSubscription = await fetch(`${baseUrl}/api/persons/123/subscription`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        personName: "Aoyama Yukari",
+        keyword: "Aoyama Yukari",
+        aliases: ["Aoyama Yukari", "Yukari"],
+      }),
+    });
+    assert.equal(savedSubscription.status, 200);
+    assert.equal((await savedSubscription.json()).aliases.length, 2);
+
+    const checkedSubscription = await fetch(`${baseUrl}/api/persons/123/subscription/check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: "manual" }),
+    });
+    assert.equal(checkedSubscription.status, 200);
+    const checkedSubscriptionPayload = await checkedSubscription.json();
+    assert.equal(checkedSubscriptionPayload.newAlertCount, 1);
+    assert.equal(checkedSubscriptionPayload.subscription.lastCheckStatus, "completed");
+
+    const deletedSubscription = await fetch(`${baseUrl}/api/persons/123/subscription`, { method: "DELETE" });
+    assert.equal(deletedSubscription.status, 200);
+    assert.equal((await deletedSubscription.json()).deleted, true);
+
+    const deletedAnnotation = await fetch(`${baseUrl}/api/works/rj100001/annotation`, { method: "DELETE" });
+    assert.equal(deletedAnnotation.status, 200);
+    assert.equal((await deletedAnnotation.json()).annotation.status, "");
+
     const account = await fetch(`${baseUrl}/api/account/dlsite`);
     assert.equal(account.status, 200);
     assert.equal((await account.json()).hasSession, false);
@@ -162,5 +259,11 @@ test("monitor routes expose sync, summary, rankings, and alerts", async () => {
     const recommendations = await fetch(`${baseUrl}/api/recommendations/affordable?limit=5`);
     assert.equal(recommendations.status, 200);
     assert.deepEqual((await recommendations.json()).items, []);
+
+    const bundles = await fetch(`${baseUrl}/api/recommendations/bundles?limit=5`);
+    assert.equal(bundles.status, 200);
+    const bundlePayload = await bundles.json();
+    assert.equal(bundlePayload.items[0].circle, "Local Circle");
+    assert.equal(bundlePayload.items[0].claimsCheckoutOptimization, false);
   });
 });
