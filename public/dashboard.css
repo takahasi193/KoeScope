@@ -865,6 +865,25 @@ textarea {
   padding: 12px 14px 14px;
 }
 
+.maintenance-box {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px 14px;
+}
+
+.maintenance-summary {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.maintenance-summary p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .account-state {
   font-size: 13px;
   font-weight: 900;

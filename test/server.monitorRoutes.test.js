@@ -117,6 +117,16 @@ function createMockMonitor() {
       items: [{ circle: "Local Circle", totalPriceJpy: 900, itemCount: 2, claimsCheckoutOptimization: false }],
       disclaimer: "Local public-price analysis only.",
     }),
+    runSnapshotCleanup: ({ dryRun }) => ({
+      dryRun,
+      retentionDays: 365,
+      cutoffAt: "2025-05-12T00:00:00.000Z",
+      priceSnapshots: { olderThanCutoff: 2, protectedOlder: 1, deletable: 1, deleted: dryRun ? 0 : 1 },
+      rankingSnapshots: { olderThanCutoff: 3, protectedOlder: 1, deletable: 2, deleted: dryRun ? 0 : 2 },
+      totalDeletable: 3,
+      totalDeleted: dryRun ? 0 : 3,
+      optimization: { pragmaOptimize: !dryRun, vacuum: false },
+    }),
   };
 }
 
@@ -265,5 +275,19 @@ test("monitor routes expose sync, summary, rankings, and alerts", async () => {
     const bundlePayload = await bundles.json();
     assert.equal(bundlePayload.items[0].circle, "Local Circle");
     assert.equal(bundlePayload.items[0].claimsCheckoutOptimization, false);
+
+    const maintenancePreview = await fetch(`${baseUrl}/api/maintenance/snapshot-cleanup?retentionDays=365`);
+    assert.equal(maintenancePreview.status, 200);
+    assert.equal((await maintenancePreview.json()).totalDeletable, 3);
+
+    const maintenanceRun = await fetch(`${baseUrl}/api/maintenance/snapshot-cleanup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dryRun: false, retentionDays: 365 }),
+    });
+    assert.equal(maintenanceRun.status, 200);
+    const maintenanceRunPayload = await maintenanceRun.json();
+    assert.equal(maintenanceRunPayload.totalDeleted, 3);
+    assert.equal(maintenanceRunPayload.optimization.pragmaOptimize, true);
   });
 });

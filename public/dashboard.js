@@ -12,6 +12,7 @@ const state = {
   account: null,
   recommendations: null,
   bundleRecommendations: null,
+  maintenance: null,
   alerts: [],
   watchlist: [],
   refreshTimer: null,
@@ -68,6 +69,9 @@ const els = {
   recommendationList: document.querySelector("#recommendationList"),
   bundleCount: document.querySelector("#bundleCount"),
   bundleList: document.querySelector("#bundleList"),
+  maintenanceSummary: document.querySelector("#maintenanceSummary"),
+  maintenanceDryRunButton: document.querySelector("#maintenanceDryRunButton"),
+  maintenanceCleanupButton: document.querySelector("#maintenanceCleanupButton"),
   watchCount: document.querySelector("#watchCount"),
   watchList: document.querySelector("#watchList"),
   dropList: document.querySelector("#dropList"),
@@ -670,6 +674,36 @@ function renderBundleRecommendations() {
   }
 }
 
+function renderMaintenance() {
+  const maintenance = state.maintenance;
+  const syncRunning = anySyncIsRunning();
+  els.maintenanceDryRunButton.disabled = syncRunning;
+  els.maintenanceCleanupButton.disabled = syncRunning || !maintenance || maintenance.totalDeletable <= 0;
+
+  if (!maintenance) {
+    els.maintenanceSummary.textContent = "正在检查可清理快照。";
+    return;
+  }
+
+  if (syncRunning) {
+    els.maintenanceSummary.textContent = "同步运行中，数据维护会等同步结束后再执行。";
+    return;
+  }
+
+  const priceCount = maintenance.priceSnapshots?.deletable ?? 0;
+  const rankCount = maintenance.rankingSnapshots?.deletable ?? 0;
+  const total = maintenance.totalDeletable ?? priceCount + rankCount;
+  const cutoffText = formatDate(maintenance.cutoffAt);
+  els.maintenanceSummary.innerHTML = `
+    <p>一年以前可清理 ${formatNumber(total)} 条快照。</p>
+    <div class="muted-line">
+      <span class="badge">价格 ${formatNumber(priceCount)}</span>
+      <span class="badge">排行 ${formatNumber(rankCount)}</span>
+    </div>
+    <p>最新、史低和提醒引用快照会保留；截止 ${escapeHtml(cutoffText)}。</p>
+  `;
+}
+
 function destroyHistoryChart(key) {
   if (historyCharts[key]?.destroy) historyCharts[key].destroy();
   historyCharts[key] = null;
@@ -827,12 +861,17 @@ function renderAll() {
   renderAccount();
   renderRecommendations();
   renderBundleRecommendations();
+  renderMaintenance();
   renderWatchlist();
   renderDrops();
 }
 
 function syncIsRunning(status = state.status) {
   return Boolean(status?.running || status?.latestRun?.status === "running");
+}
+
+function anySyncIsRunning() {
+  return syncIsRunning(state.status) || syncIsRunning(state.activityStatus);
 }
 
 function scheduleRefresh(delayMs) {
@@ -897,6 +936,7 @@ async function refreshAll() {
       account,
       recommendations,
       bundleRecommendations,
+      maintenance,
     ] = await Promise.all([
       getJson("/api/dashboard/summary"),
       getJson("/api/sync/status"),
@@ -909,6 +949,7 @@ async function refreshAll() {
       getJson("/api/account/dlsite"),
       getJson("/api/recommendations/affordable?limit=8"),
       getJson("/api/recommendations/bundles?limit=4"),
+      getJson("/api/maintenance/snapshot-cleanup?retentionDays=365"),
     ]);
     state.summary = summary;
     state.status = status;
@@ -921,6 +962,7 @@ async function refreshAll() {
     state.account = account;
     state.recommendations = recommendations;
     state.bundleRecommendations = bundleRecommendations;
+    state.maintenance = maintenance;
     renderAll();
     notifyDashboardUnread();
   } catch (error) {
@@ -974,6 +1016,40 @@ async function clearAccountSession() {
     state.account = null;
     state.recommendations = null;
     toast("已断开 DLsite 账号。");
+    await refreshAll();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function previewSnapshotCleanup() {
+  try {
+    state.maintenance = await getJson("/api/maintenance/snapshot-cleanup?retentionDays=365");
+    renderMaintenance();
+    toast(`可清理 ${formatNumber(state.maintenance.totalDeletable)} 条旧快照。`);
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function runSnapshotCleanup() {
+  if (anySyncIsRunning()) {
+    toast("同步运行中，暂不执行数据维护。");
+    return;
+  }
+  if (typeof window.confirm === "function") {
+    const confirmed = window.confirm("执行本地快照清理？最新、史低和提醒引用快照会保留。");
+    if (!confirmed) return;
+  }
+
+  try {
+    const payload = await sendJson("/api/maintenance/snapshot-cleanup", {
+      dryRun: false,
+      retentionDays: 365,
+    });
+    state.maintenance = payload;
+    renderMaintenance();
+    toast(`已清理 ${formatNumber(payload.totalDeleted)} 条旧快照。`);
     await refreshAll();
   } catch (error) {
     toast(error.message);
@@ -1113,6 +1189,8 @@ els.showAllAlertsButton.addEventListener("click", async () => {
 });
 els.accountSyncButton.addEventListener("click", syncAccount);
 els.accountClearButton.addEventListener("click", clearAccountSession);
+els.maintenanceDryRunButton.addEventListener("click", previewSnapshotCleanup);
+els.maintenanceCleanupButton.addEventListener("click", runSnapshotCleanup);
 els.annotationForm.addEventListener("submit", saveHistoryAnnotation);
 els.deleteAnnotationButton.addEventListener("click", deleteHistoryAnnotation);
 els.closeHistoryButton.addEventListener("click", closeHistory);

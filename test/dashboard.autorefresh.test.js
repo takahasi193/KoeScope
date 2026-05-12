@@ -89,6 +89,7 @@ function createDashboardHarness({ running = false, chartFactory = undefined, not
     window: {
       Chart: chartFactory,
       Notification: FakeNotification,
+      confirm: () => true,
       prompt: () => null,
     },
     fetch: async (url, options = {}) => {
@@ -289,6 +290,18 @@ function createDashboardHarness({ running = false, chartFactory = undefined, not
             },
           ],
         };
+      } else if (path.startsWith("/api/maintenance/snapshot-cleanup")) {
+        const isExecute = options.method === "POST" && JSON.parse(options.body || "{}").dryRun === false;
+        body = {
+          dryRun: !isExecute,
+          retentionDays: 365,
+          cutoffAt: "2025-05-12T00:00:00.000Z",
+          priceSnapshots: { olderThanCutoff: 2, protectedOlder: 1, deletable: 1, deleted: isExecute ? 1 : 0 },
+          rankingSnapshots: { olderThanCutoff: 3, protectedOlder: 1, deletable: 2, deleted: isExecute ? 2 : 0 },
+          totalDeletable: 3,
+          totalDeleted: isExecute ? 3 : 0,
+          optimization: { pragmaOptimize: isExecute, vacuum: false },
+        };
       } else if (path === "/api/sync/dlsite-rankings" && options.method === "POST") {
         status.running = true;
         status.latestRun = { id: 1, status: "running", progress: { completedTargets: 0, totalTargets: 6 } };
@@ -444,4 +457,23 @@ test("dashboard renders bundle advice and dedupes open-page browser notification
   await vm.runInContext("refreshAll()", context);
   await flushAsyncWork();
   assert.equal(notifications.length, 2);
+});
+
+test("dashboard renders maintenance cleanup preview and executes cleanup", async () => {
+  const { context, elements, requests } = createDashboardHarness({ running: false });
+  await flushAsyncWork();
+
+  assert.match(elements.get("#maintenanceSummary").innerHTML, /3/);
+  assert.equal(
+    requests.some((request) => request.path === "/api/maintenance/snapshot-cleanup?retentionDays=365"),
+    true
+  );
+
+  requests.length = 0;
+  await vm.runInContext("runSnapshotCleanup()", context);
+  await flushAsyncWork();
+
+  const cleanupRequest = requests.find((request) => request.path === "/api/maintenance/snapshot-cleanup");
+  assert.deepEqual(JSON.parse(cleanupRequest.options.body), { dryRun: false, retentionDays: 365 });
+  assert.match(elements.get("#toast").textContent, /3/);
 });

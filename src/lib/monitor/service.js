@@ -765,6 +765,29 @@ export function createDlsiteMonitor({
     };
   }
 
+  function snapshotCleanupIsBlocked() {
+    const latestRun = activeRunId ? repository.getSyncRun(activeRunId) : repository.getLatestSyncRun?.();
+    const latestActivityRun = activeActivityRunId
+      ? repository.getActivitySyncRun(activeActivityRunId)
+      : repository.getLatestActivitySyncRun?.();
+    return Boolean(
+      activePromise ||
+        activeActivityPromise ||
+        latestRun?.status === "running" ||
+        latestActivityRun?.status === "running"
+    );
+  }
+
+  function runSnapshotCleanup(options = {}) {
+    const dryRun = options.dryRun !== false;
+    if (!dryRun && snapshotCleanupIsBlocked()) {
+      const error = new Error("Snapshot cleanup is blocked while a sync is running.");
+      error.statusCode = 409;
+      throw error;
+    }
+    return repository.runSnapshotCleanup({ ...options, dryRun });
+  }
+
   return {
     repository,
     startSync,
@@ -814,6 +837,7 @@ export function createDlsiteMonitor({
     getAffordableRecommendations: (query) =>
       attachCachedWorkCollectionPayload(repository.getAffordableRecommendations(query)),
     getBundleRecommendations: (query) => attachCachedBundlePayload(repository.getBundleRecommendations(query)),
+    runSnapshotCleanup,
     close: () => {
       stopDailyScheduler();
       repository.close();

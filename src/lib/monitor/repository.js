@@ -3,6 +3,7 @@ import { createAnnotationsRepository } from "./db/annotationsRepository.js";
 import { createActivitiesRepository } from "./db/activitiesRepository.js";
 import { createAlertsRepository } from "./db/alertsRepository.js";
 import { openMonitorDatabase } from "./db/connection.js";
+import { createMaintenanceRepository } from "./db/maintenanceRepository.js";
 import { createRankingsRepository } from "./db/rankingsRepository.js";
 import { prepareMonitorStatements } from "./db/statements.js";
 import { createSubscriptionsRepository } from "./db/subscriptionsRepository.js";
@@ -23,6 +24,7 @@ export function createMonitorRepository(options = {}) {
     getAccountProfile: account.getAccountProfile,
   });
   const alerts = createAlertsRepository({ db, statements });
+  const maintenance = createMaintenanceRepository({ db });
   const watchlist = createWatchlistRepository({
     db,
     statements,
@@ -106,6 +108,7 @@ export function createMonitorRepository(options = {}) {
     clearAccountSession: account.clearAccountSession,
     getAffordableRecommendations: account.getAffordableRecommendations,
     getBundleRecommendations: account.getBundleRecommendations,
+    runSnapshotCleanup: maintenance.runSnapshotCleanup,
     close,
   };
 }

@@ -40,8 +40,8 @@ Completed baseline:
 
 ## Phase 6: Data Maintenance
 
-- [ ] Snapshot cleanup dry-run: add a maintenance API/tool that reports redundant snapshots older than one year before deleting anything.
-- [ ] Safe cleanup execution: preserve latest snapshots, historical-low snapshots, and snapshots referenced by alerts; block cleanup while sync is running.
-- [ ] SQLite optimization: run `PRAGMA optimize` after cleanup, and use `VACUUM` only when needed after larger deletes.
-- [ ] Maintenance UI or command: expose a clear local-only control path for dry-run and execution.
-- [ ] Phase 6 verification: prove dry-run counts match execution counts and Dashboard/history/alerts still read correctly after cleanup.
+- [x] Snapshot cleanup dry-run: add a maintenance API/tool that reports redundant snapshots older than one year before deleting anything. Done 2026-05-12 on branch `feature/phase-6-maintenance`; `GET /api/maintenance/snapshot-cleanup` reports price/ranking cleanup candidates without deletion.
+- [x] Safe cleanup execution: preserve latest snapshots, historical-low snapshots, and snapshots referenced by alerts; block cleanup while sync is running. Done 2026-05-12 on branch `feature/phase-6-maintenance`; execution keeps protected snapshot sets and returns 409 while monitor/activity sync is running.
+- [x] SQLite optimization: run `PRAGMA optimize` after cleanup, and use `VACUUM` only when needed after larger deletes. Done 2026-05-12 on branch `feature/phase-6-maintenance`; cleanup reports optimization details and gates `VACUUM` behind a larger-delete/free-page threshold.
+- [x] Maintenance UI or command: expose a clear local-only control path for dry-run and execution. Done 2026-05-12 on branch `feature/phase-6-maintenance`; Dashboard now shows a local data-maintenance preview and execute button.
+- [x] Phase 6 verification: prove dry-run counts match execution counts and Dashboard/history/alerts still read correctly after cleanup. Done 2026-05-12 on branch `feature/phase-6-maintenance`; repository, service, server, and Dashboard tests cover dry-run/execution parity and preserved history/alert reads.

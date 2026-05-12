@@ -120,6 +120,15 @@ function readRecommendationLimit(value) {
   return Math.min(Math.max(Number(value) || 10, 1), 30);
 }
 
+function readMaintenanceRetentionDays(value) {
+  if (value === null || value === undefined || value === "") return 365;
+  return Math.trunc(Number(value));
+}
+
+function readMaintenanceDryRun(value) {
+  return value !== false && value !== "false" && value !== "0";
+}
+
 function readActivityAlertSummaryLimit(value) {
   return Math.min(Math.max(Number(value) || 3, 1), 10);
 }
@@ -548,6 +557,24 @@ export function createApp({ monitor = null, searchHistory = null, searchJobStore
         budgetJpy: req.query.budgetJpy,
         limit: readRecommendationLimit(req.query.limit),
         excludeCollection: req.query.excludeCollection !== "0",
+      })
+    );
+  });
+
+  app.get("/api/maintenance/snapshot-cleanup", (req, res) => {
+    res.json(
+      resolvedMonitor.runSnapshotCleanup({
+        dryRun: true,
+        retentionDays: readMaintenanceRetentionDays(req.query.retentionDays),
+      })
+    );
+  });
+
+  app.post("/api/maintenance/snapshot-cleanup", (req, res) => {
+    res.json(
+      resolvedMonitor.runSnapshotCleanup({
+        dryRun: readMaintenanceDryRun(req.body?.dryRun),
+        retentionDays: readMaintenanceRetentionDays(req.body?.retentionDays),
       })
     );
   });

@@ -93,6 +93,116 @@ test("repository stores works, rankings, watchlist alerts, and price deltas", ()
   }
 });
 
+test("repository dry-runs and executes redundant snapshot cleanup safely", () => {
+  const repo = createMonitorRepository({ dbPath: tempDbPath() });
+  try {
+    const run1 = repo.createSyncRun({ scope: { reason: "old" }, totalTargets: 1 });
+    repo.saveSyncedProducts({
+      syncRunId: run1.id,
+      capturedAt: "2024-01-01T00:00:00.000Z",
+      entries: [sampleEntry({ priceJpy: 2000, officialPriceJpy: 2000, sales: 10 })],
+    });
+    repo.updateSyncRun(run1.id, { status: "completed", fetchedRankings: 1, enrichedWorks: 1 });
+
+    const run2 = repo.createSyncRun({ scope: { reason: "historical-low" }, totalTargets: 1 });
+    repo.saveSyncedProducts({
+      syncRunId: run2.id,
+      capturedAt: "2024-02-01T00:00:00.000Z",
+      entries: [sampleEntry({ priceJpy: 1500, officialPriceJpy: 2000, sales: 20 })],
+    });
+    repo.updateSyncRun(run2.id, { status: "completed", fetchedRankings: 1, enrichedWorks: 1 });
+
+    const run3 = repo.createSyncRun({ scope: { reason: "alerted" }, totalTargets: 1 });
+    repo.saveSyncedProducts({
+      syncRunId: run3.id,
+      capturedAt: "2024-03-01T00:00:00.000Z",
+      entries: [sampleEntry({ priceJpy: 1800, officialPriceJpy: 2000, sales: 30 })],
+    });
+    repo.updateSyncRun(run3.id, { status: "completed", fetchedRankings: 1, enrichedWorks: 1 });
+
+    repo.db
+      .prepare(
+        `INSERT INTO alerts (
+          product_id, type, previous_price_jpy, current_price_jpy, target_price_jpy,
+          message, status, created_at, source_run_id, person_id, person_name, metadata_json, fingerprint
+        )
+        VALUES (
+          'RJ100001', 'price_drop', 2000, 1800, NULL,
+          'Alerted snapshot', 'unread', '2024-03-01T00:00:00.000Z', ?, NULL, '', '{}', 'cleanup:alerted'
+        )`
+      )
+      .run(run3.id);
+
+    const run4 = repo.createSyncRun({ scope: { reason: "latest" }, totalTargets: 1 });
+    repo.saveSyncedProducts({
+      syncRunId: run4.id,
+      capturedAt: "2026-05-01T00:00:00.000Z",
+      entries: [sampleEntry({ priceJpy: 1900, officialPriceJpy: 2000, sales: 40 })],
+    });
+    repo.updateSyncRun(run4.id, { status: "completed", fetchedRankings: 1, enrichedWorks: 1 });
+
+    const dryRun = repo.runSnapshotCleanup({
+      dryRun: true,
+      retentionDays: 365,
+      now: "2026-05-12T00:00:00.000Z",
+    });
+
+    assert.equal(dryRun.dryRun, true);
+    assert.equal(dryRun.cutoffAt, "2025-05-12T00:00:00.000Z");
+    assert.equal(dryRun.priceSnapshots.olderThanCutoff, 3);
+    assert.equal(dryRun.priceSnapshots.protectedOlder, 2);
+    assert.equal(dryRun.priceSnapshots.deletable, 1);
+    assert.equal(dryRun.rankingSnapshots.olderThanCutoff, 3);
+    assert.equal(dryRun.rankingSnapshots.protectedOlder, 1);
+    assert.equal(dryRun.rankingSnapshots.deletable, 2);
+    assert.equal(dryRun.totalDeletable, 3);
+    assert.equal(repo.getWorkHistory("RJ100001").prices.length, 4);
+
+    const executed = repo.runSnapshotCleanup({
+      dryRun: false,
+      retentionDays: 365,
+      now: "2026-05-12T00:00:00.000Z",
+    });
+
+    assert.equal(executed.dryRun, false);
+    assert.equal(executed.totalDeleted, dryRun.totalDeletable);
+    assert.equal(executed.priceSnapshots.deleted, dryRun.priceSnapshots.deletable);
+    assert.equal(executed.rankingSnapshots.deleted, dryRun.rankingSnapshots.deletable);
+    assert.equal(executed.optimization.pragmaOptimize, true);
+    assert.equal(executed.optimization.vacuum, false);
+
+    const history = repo.getWorkHistory("RJ100001");
+    assert.deepEqual(
+      history.prices.map((item) => item.capturedAt),
+      [
+        "2024-02-01T00:00:00.000Z",
+        "2024-03-01T00:00:00.000Z",
+        "2026-05-01T00:00:00.000Z",
+      ]
+    );
+    assert.deepEqual(
+      history.ranks.map((item) => item.capturedAt),
+      ["2024-03-01T00:00:00.000Z", "2026-05-01T00:00:00.000Z"]
+    );
+    assert.deepEqual(history.priceSummary, {
+      historicalLowPriceJpy: 1500,
+      historicalLowCapturedAt: "2024-02-01T00:00:00.000Z",
+      priceSnapshotCount: 3,
+    });
+
+    const alerts = repo.getAlerts({ status: "all" });
+    assert.equal(alerts.length, 1);
+    assert.equal(alerts[0].isHistoricalLow, false);
+
+    const rankings = repo.getRankings({ floor: "home", period: "week", category: "voice" });
+    assert.equal(rankings.capturedAt, "2026-05-01T00:00:00.000Z");
+    assert.equal(rankings.items[0].latestPriceJpy, 1900);
+    assert.equal(repo.getDashboardSummary().totalWorks, 1);
+  } finally {
+    repo.close();
+  }
+});
+
 test("repository creates performance indexes idempotently", () => {
   const dbPath = tempDbPath();
   const repo = createMonitorRepository({ dbPath });

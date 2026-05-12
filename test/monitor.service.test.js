@@ -82,6 +82,32 @@ test("monitor activity payload keeps related-work matches and adds activity stat
   assert.equal(payload.account.pointsJpy, 500);
 });
 
+test("monitor blocks snapshot cleanup execution while sync is running", () => {
+  let cleanupCalled = false;
+  const repository = {
+    getLatestSyncRun: () => ({ id: 7, status: "running", startedAt: "2026-05-12T00:00:00.000Z" }),
+    getSyncRun: () => ({ id: 7, status: "running", startedAt: "2026-05-12T00:00:00.000Z" }),
+    getLatestActivitySyncRun: () => ({ id: 8, status: "completed", startedAt: "2026-05-12T00:00:00.000Z" }),
+    runSnapshotCleanup: (options) => {
+      cleanupCalled = true;
+      return { dryRun: options.dryRun, totalDeletable: 0 };
+    },
+    close: () => {},
+  };
+
+  const monitor = createDlsiteMonitor({ repository });
+  const preview = monitor.runSnapshotCleanup({ dryRun: true, retentionDays: 365 });
+  assert.equal(preview.dryRun, true);
+  assert.equal(cleanupCalled, true);
+
+  cleanupCalled = false;
+  assert.throws(
+    () => monitor.runSnapshotCleanup({ dryRun: false, retentionDays: 365 }),
+    /blocked while a sync is running/
+  );
+  assert.equal(cleanupCalled, false);
+});
+
 test("monitor payloads expose cached image URLs without replacing remote URLs", () => {
   const imageCache = {
     resolveCachedImageUrl: (url, { type }) => (url ? `/cache/${type}/${url.split("/").at(-1)}` : ""),
