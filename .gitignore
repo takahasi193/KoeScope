@@ -8,3 +8,6 @@ data/
 public/cache/*
 !public/cache/.gitkeep
 .chrome-dlvoice-profile/
+web/.next/
+web/out/
+web/next-env.d.ts

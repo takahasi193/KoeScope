@@ -1,0 +1,111 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+html {
+  min-width: 320px;
+}
+
+body {
+  min-width: 320px;
+}
+
+.next-root {
+  min-height: 100vh;
+}
+
+.next-panel-note {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.next-inline-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.next-scroll-table {
+  overflow-x: auto;
+}
+
+.next-empty {
+  padding: 18px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--surface-panel);
+}
+
+.next-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.next-kv {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.next-kv span,
+.next-chip {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-strong);
+}
+
+.next-mini-list {
+  display: grid;
+  gap: 10px;
+}
+
+.next-mini-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.next-mini-row img {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--surface-muted);
+}
+
+.next-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+}
+
+.next-form-row label {
+  display: grid;
+  gap: 6px;
+}
+
+.next-form-row input,
+.next-form-row select,
+.next-form-row textarea {
+  min-height: 38px;
+}
+
+.next-dialog {
+  position: fixed;
+  inset: 64px 18px 18px auto;
+  width: min(520px, calc(100vw - 36px));
+  z-index: 20;
+}
+
+@media (max-width: 780px) {
+  .next-dialog {
+    inset: 48px 10px 10px;
+    width: auto;
+  }
+}

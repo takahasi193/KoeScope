@@ -4,7 +4,7 @@
 
 Local DLsite helper app at `E:\DL Manager\KoeScope`.
 
-It is a Node.js 20 + Express 5 app with a plain HTML/CSS/JS frontend, SQLite persistence via `better-sqlite3`, DLsite/Bangumi scraping via `fetch` + `cheerio`, and a Chrome companion extension in `extension/`.
+It is a Node.js 20 + Express 5 app with a React/Next.js static-export frontend in `web/`, SQLite persistence via `better-sqlite3`, DLsite/Bangumi scraping via `fetch` + `cheerio`, and a Chrome companion extension in `extension/`. Legacy `public/*.html/js/css` files are kept as rollback/static-resource fallbacks during the migration.
 
 ## Commands
 
@@ -13,6 +13,8 @@ It is a Node.js 20 + Express 5 app with a plain HTML/CSS/JS frontend, SQLite per
 - Default app: `http://localhost:5178`
 - Monitor dashboard: `http://localhost:5178/dashboard.html`
 - Tests: `npm test`
+- Next frontend build: `npm run web:build`
+- Next frontend tests: `npm run web:test`
 
 ## Worktree Protocol
 
@@ -23,7 +25,7 @@ It is a Node.js 20 + Express 5 app with a plain HTML/CSS/JS frontend, SQLite per
 - For every feature or optimization task, create a new git branch before editing code or tests. Use a short descriptive branch name such as `feature/dark-mode` or `optimize/snapshot-cleanup`.
 - Do not merge a feature or optimization branch into `main` until both checks have happened: Codex has run the relevant automated tests and smoke checks, and the user has personally tested and approved the result.
 - Do not run `git add`, `git commit`, or merge into `main` for feature or optimization work unless the user explicitly asks after the dual-testing step. Documentation-only planning edits may stay unstaged unless the user asks to commit them.
-- Prefer narrow patches that follow existing plain HTML/CSS/JS, Express, and SQLite patterns.
+- Prefer narrow patches that follow existing React/Next.js, Express, and SQLite patterns. Keep frontend changes in `web/` unless intentionally updating static assets or rollback files under `public/`.
 - Use `apply_patch` for manual edits.
 - Prefer `rg` for searching code and tests.
 - If the app is already running on port `5178` and current code must be verified, stop the old listener and restart on `5178`; do not switch to another port unless the user asks.
@@ -33,6 +35,7 @@ It is a Node.js 20 + Express 5 app with a plain HTML/CSS/JS frontend, SQLite per
 
 - Run full `npm test` before code changes when the user explicitly asks for a baseline test gate, or when the change depends on recent uncommitted monitor/activity work.
 - Run full `npm test` after every implementation that touches backend behavior, persistence, dashboard rendering, extension behavior, or tests.
+- Run `npm run web:build` after frontend changes that touch Next pages, shared React components, frontend API clients, or routing/static export behavior.
 - Do not treat a unit test pass as enough for dashboard-facing monitor work. Also verify the live API and dashboard path when practical.
 - For monitor/dashboard changes, verify at least:
   - `GET /api/health`
@@ -52,7 +55,9 @@ It is a Node.js 20 + Express 5 app with a plain HTML/CSS/JS frontend, SQLite per
 - `src/lib/monitor/dlsiteRanking.js`: DLsite ranking fetch/parse/enrich logic.
 - `src/lib/monitor/dlsiteActivities.js`: DLsite activity/campaign fetch/parse/classify logic.
 - `src/lib/dlsiteAccount.js`: account points, wishlist, purchased works import/sync.
-- `public/dashboard.html`, `public/dashboard.js`, `public/dashboard.css`: monitor UI.
+- `web/src/app/`: React/Next.js pages for search, person detail, Dashboard, and activity center.
+- `web/src/lib/`: frontend API clients, view helpers, and tests.
+- `public/dashboard.html`, `public/dashboard.js`, `public/dashboard.css`: legacy rollback UI and shared static CSS resources.
 - `extension/`: Chrome extension that captures logged-in DLsite account pages.
 
 ## Current Features
@@ -130,8 +135,8 @@ Dashboard activity UI rules:
 ## Recent Verification
 
 - `npm test` passed: 52/52 after activity detail parsing and dashboard compact-detail changes.
-- Real activity sync on `localhost:5178` completed successfully.
-- Dashboard rendered correctly with activity cards, collapsed detail panels, fallback states, and no browser console errors.
+- React/Next.js static export build passed and Express serves `web/out` before legacy `public/*.html` when the build output exists.
+- Dashboard/activity API and static-page smoke checks passed on `localhost:5178` with schedulers disabled.
 
 ## Notes For Future Agents
 

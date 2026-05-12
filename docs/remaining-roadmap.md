@@ -4,6 +4,7 @@ This document is the source of truth for future KoeScope optimization and featur
 
 Completed baseline:
 - Phase 1/2 data and dashboard work landed in `39156b1`: SQLite performance indexes, historical-low signals, local Chart.js serving, and history trend charts.
+- React/Next.js frontend migration landed on branch `feature/react-next-frontend`: `web/` now owns the search, person detail, Dashboard, and activity-center static-export pages while Express keeps existing API/SQLite/extension contracts and legacy `public/` rollback assets.
 
 ## Maintenance Rule
 
