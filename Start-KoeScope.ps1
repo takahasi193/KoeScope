@@ -37,7 +37,7 @@ if (-not $isHealthy) {
     throw "Port $Port is already in use, but KoeScope health check failed."
   }
 
-  $command = "cd /d `"$projectRoot`" && npm start >> `"$outLog`" 2>> `"$errLog`""
+  $command = "cd /d `"$projectRoot`" && set `"PORT=$Port`" && npm start >> `"$outLog`" 2>> `"$errLog`""
   Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $command -WorkingDirectory $projectRoot -WindowStyle Hidden | Out-Null
 
   for ($attempt = 0; $attempt -lt 30; $attempt += 1) {
