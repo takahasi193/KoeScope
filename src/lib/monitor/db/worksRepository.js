@@ -164,7 +164,32 @@ export function createWorksRepository({ db, statements }) {
          ORDER BY captured_at ASC, id ASC`
       )
       .all(normalized);
-    return { work, prices, ranks };
+    const priceSummary = db
+      .prepare(
+        `WITH priced AS (
+           SELECT price_jpy, captured_at, id
+           FROM price_snapshots
+           WHERE product_id = ?
+             AND price_jpy IS NOT NULL
+         ),
+         lowest AS (
+           SELECT MIN(price_jpy) AS historicalLowPriceJpy,
+                  COUNT(price_jpy) AS priceSnapshotCount
+           FROM priced
+         )
+         SELECT lowest.historicalLowPriceJpy,
+                (
+                  SELECT captured_at
+                  FROM priced
+                  WHERE price_jpy = lowest.historicalLowPriceJpy
+                  ORDER BY captured_at DESC, id DESC
+                  LIMIT 1
+                ) AS historicalLowCapturedAt,
+                lowest.priceSnapshotCount
+         FROM lowest`
+      )
+      .get(normalized);
+    return { work, prices, ranks, priceSummary };
   }
 
   function getNotablePriceDrops(limit = 8) {
@@ -185,6 +210,20 @@ export function createWorksRepository({ db, statements }) {
          SELECT w.*, previous.price_jpy AS previous_price_jpy,
                 latest.price_jpy - previous.price_jpy AS price_delta_jpy,
                 ROUND(((latest.price_jpy - previous.price_jpy) * 100.0) / previous.price_jpy, 1) AS price_delta_percent,
+                (SELECT MIN(ps.price_jpy)
+                   FROM price_snapshots ps
+                  WHERE ps.product_id = latest.product_id
+                    AND ps.price_jpy IS NOT NULL) AS historical_low_price_jpy,
+                (SELECT ps.captured_at
+                   FROM price_snapshots ps
+                  WHERE ps.product_id = latest.product_id
+                    AND ps.price_jpy IS NOT NULL
+                  ORDER BY ps.price_jpy ASC, ps.captured_at DESC, ps.id DESC
+                  LIMIT 1) AS historical_low_captured_at,
+                (SELECT COUNT(ps.price_jpy)
+                   FROM price_snapshots ps
+                  WHERE ps.product_id = latest.product_id
+                    AND ps.price_jpy IS NOT NULL) AS price_snapshot_count,
                 wl.product_id IS NOT NULL AS is_watched,
                 wl.target_price_jpy
          FROM latest

@@ -185,10 +185,18 @@
         <div class="history-grid">
           <div>
             <h3>价格快照</h3>
+            <div class="history-chart">
+              <canvas id="priceTrendChart" aria-label="Price trend chart"></canvas>
+              <div class="history-chart-empty" id="priceTrendEmpty">No price trend data.</div>
+            </div>
             <div class="history-list" id="priceHistory"></div>
           </div>
           <div>
             <h3>排名快照</h3>
+            <div class="history-chart">
+              <canvas id="rankTrendChart" aria-label="Rank trend chart"></canvas>
+              <div class="history-chart-empty" id="rankTrendEmpty">No rank trend data.</div>
+            </div>
             <div class="history-list" id="rankHistory"></div>
           </div>
         </div>
@@ -197,6 +205,7 @@
 
     <div class="toast" id="toast" hidden></div>
     <script src="/activityUi.js"></script>
+    <script src="/vendor/chart.js/chart.umd.js"></script>
     <script src="/dashboard.js" type="module"></script>
   </body>
 </html>

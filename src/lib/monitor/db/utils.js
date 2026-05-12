@@ -147,6 +147,16 @@ export function accountListLabel(type) {
 
 export function mapWorkRow(row) {
   if (!row) return null;
+  const latestPriceJpy = row.latest_price_jpy;
+  const historicalLowPriceJpy = row.historical_low_price_jpy;
+  const priceSnapshotCount = row.price_snapshot_count ?? 0;
+  const isHistoricalLow =
+    row.is_historical_low !== undefined
+      ? Boolean(row.is_historical_low)
+      : Number.isFinite(Number(latestPriceJpy)) &&
+        Number.isFinite(Number(historicalLowPriceJpy)) &&
+        Number(priceSnapshotCount) > 1 &&
+        Number(latestPriceJpy) <= Number(historicalLowPriceJpy);
   return {
     productId: row.product_id,
     title: row.title,
@@ -161,7 +171,7 @@ export function mapWorkRow(row) {
     genres: parseJson(row.genres_json, []),
     firstSeenAt: row.first_seen_at,
     lastSeenAt: row.last_seen_at,
-    latestPriceJpy: row.latest_price_jpy,
+    latestPriceJpy,
     latestOfficialPriceJpy: row.latest_official_price_jpy,
     latestDiscountRate: row.latest_discount_rate,
     latestSales: row.latest_sales,
@@ -173,6 +183,10 @@ export function mapWorkRow(row) {
     previousPriceJpy: row.previous_price_jpy,
     priceDeltaJpy: row.price_delta_jpy,
     priceDeltaPercent: row.price_delta_percent,
+    historicalLowPriceJpy,
+    historicalLowCapturedAt: row.historical_low_captured_at,
+    priceSnapshotCount,
+    isHistoricalLow,
     discountEndsAt: row.discount_ends_at,
     isWatched: Boolean(row.is_watched),
     targetPriceJpy: row.target_price_jpy,
@@ -197,12 +211,22 @@ export function mapSyncRun(row) {
 
 export function mapAlert(row) {
   if (!row) return null;
+  const currentPriceJpy = row.current_price_jpy;
+  const historicalLowPriceJpy = row.historical_low_price_jpy;
+  const priceSnapshotCount = row.price_snapshot_count ?? 0;
+  const isHistoricalLow =
+    row.is_historical_low !== undefined
+      ? Boolean(row.is_historical_low)
+      : Number.isFinite(Number(currentPriceJpy)) &&
+        Number.isFinite(Number(historicalLowPriceJpy)) &&
+        Number(priceSnapshotCount) > 1 &&
+        Number(currentPriceJpy) <= Number(historicalLowPriceJpy);
   return {
     id: row.id,
     productId: row.product_id,
     type: row.type,
     previousPriceJpy: row.previous_price_jpy,
-    currentPriceJpy: row.current_price_jpy,
+    currentPriceJpy,
     targetPriceJpy: row.target_price_jpy,
     message: row.message,
     status: row.status,
@@ -211,6 +235,10 @@ export function mapAlert(row) {
     title: row.title,
     imageUrl: row.image_url,
     circle: row.circle,
+    historicalLowPriceJpy,
+    historicalLowCapturedAt: row.historical_low_captured_at,
+    priceSnapshotCount,
+    isHistoricalLow,
   };
 }
 

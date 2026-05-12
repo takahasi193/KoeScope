@@ -85,6 +85,20 @@ export function createRankingsRepository({ db, statements }) {
              WHEN pp.price_jpy IS NOT NULL AND pp.price_jpy > 0 AND w.latest_price_jpy IS NOT NULL
              THEN ROUND(((w.latest_price_jpy - pp.price_jpy) * 100.0) / pp.price_jpy, 1)
            END AS price_delta_percent,
+           (SELECT MIN(ps.price_jpy)
+              FROM price_snapshots ps
+             WHERE ps.product_id = rs.product_id
+               AND ps.price_jpy IS NOT NULL) AS historical_low_price_jpy,
+           (SELECT ps.captured_at
+              FROM price_snapshots ps
+             WHERE ps.product_id = rs.product_id
+               AND ps.price_jpy IS NOT NULL
+             ORDER BY ps.price_jpy ASC, ps.captured_at DESC, ps.id DESC
+             LIMIT 1) AS historical_low_captured_at,
+           (SELECT COUNT(ps.price_jpy)
+              FROM price_snapshots ps
+             WHERE ps.product_id = rs.product_id
+               AND ps.price_jpy IS NOT NULL) AS price_snapshot_count,
            wl.product_id IS NOT NULL AS is_watched,
            wl.target_price_jpy
          FROM ranking_snapshots rs

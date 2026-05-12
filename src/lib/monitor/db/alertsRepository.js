@@ -4,10 +4,38 @@ export function createAlertsRepository({ db, statements }) {
   function getAlerts({ status = "unread", limit = 50 } = {}) {
     const sql =
       status === "all"
-        ? `SELECT a.*, w.title, w.image_url, w.circle
+        ? `SELECT a.*, w.title, w.image_url, w.circle,
+                  (SELECT MIN(ps.price_jpy)
+                     FROM price_snapshots ps
+                    WHERE ps.product_id = a.product_id
+                      AND ps.price_jpy IS NOT NULL) AS historical_low_price_jpy,
+                  (SELECT ps.captured_at
+                     FROM price_snapshots ps
+                    WHERE ps.product_id = a.product_id
+                      AND ps.price_jpy IS NOT NULL
+                    ORDER BY ps.price_jpy ASC, ps.captured_at DESC, ps.id DESC
+                    LIMIT 1) AS historical_low_captured_at,
+                  (SELECT COUNT(ps.price_jpy)
+                     FROM price_snapshots ps
+                    WHERE ps.product_id = a.product_id
+                      AND ps.price_jpy IS NOT NULL) AS price_snapshot_count
            FROM alerts a JOIN works w ON w.product_id = a.product_id
            ORDER BY a.created_at DESC LIMIT ?`
-        : `SELECT a.*, w.title, w.image_url, w.circle
+        : `SELECT a.*, w.title, w.image_url, w.circle,
+                  (SELECT MIN(ps.price_jpy)
+                     FROM price_snapshots ps
+                    WHERE ps.product_id = a.product_id
+                      AND ps.price_jpy IS NOT NULL) AS historical_low_price_jpy,
+                  (SELECT ps.captured_at
+                     FROM price_snapshots ps
+                    WHERE ps.product_id = a.product_id
+                      AND ps.price_jpy IS NOT NULL
+                    ORDER BY ps.price_jpy ASC, ps.captured_at DESC, ps.id DESC
+                    LIMIT 1) AS historical_low_captured_at,
+                  (SELECT COUNT(ps.price_jpy)
+                     FROM price_snapshots ps
+                    WHERE ps.product_id = a.product_id
+                      AND ps.price_jpy IS NOT NULL) AS price_snapshot_count
            FROM alerts a JOIN works w ON w.product_id = a.product_id
            WHERE a.status = 'unread'
            ORDER BY a.created_at DESC LIMIT ?`;

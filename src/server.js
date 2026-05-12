@@ -166,6 +166,7 @@ export function createApp({
   const app = express();
 
   app.use(express.json({ limit: "5mb" }));
+  app.use("/vendor/chart.js", express.static(path.join(__dirname, "..", "node_modules", "chart.js", "dist")));
   app.use(express.static(path.join(__dirname, "..", "public")));
 
   app.get("/api/health", (_req, res) => {

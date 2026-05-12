@@ -60,6 +60,12 @@ export function migrateMonitorDatabase(db) {
     CREATE INDEX IF NOT EXISTS idx_ranking_latest
       ON ranking_snapshots(floor, period, category, captured_at DESC, rank ASC);
 
+    CREATE INDEX IF NOT EXISTS idx_ranking_work_history
+      ON ranking_snapshots(product_id, captured_at ASC, id ASC);
+
+    CREATE INDEX IF NOT EXISTS idx_ranking_work_latest
+      ON ranking_snapshots(product_id, floor, period, category, captured_at DESC, id DESC);
+
     CREATE TABLE IF NOT EXISTS price_snapshots (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       product_id TEXT NOT NULL REFERENCES works(product_id) ON DELETE CASCADE,
@@ -75,6 +81,12 @@ export function migrateMonitorDatabase(db) {
     CREATE INDEX IF NOT EXISTS idx_price_history
       ON price_snapshots(product_id, captured_at ASC);
 
+    CREATE INDEX IF NOT EXISTS idx_price_latest
+      ON price_snapshots(product_id, captured_at DESC, id DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_price_lowest
+      ON price_snapshots(product_id, price_jpy ASC, captured_at DESC, id DESC);
+
     CREATE TABLE IF NOT EXISTS watchlist (
       product_id TEXT PRIMARY KEY REFERENCES works(product_id) ON DELETE CASCADE,
       target_price_jpy INTEGER,
@@ -83,6 +95,9 @@ export function migrateMonitorDatabase(db) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE INDEX IF NOT EXISTS idx_watchlist_updated
+      ON watchlist(updated_at DESC, product_id);
 
     CREATE TABLE IF NOT EXISTS alerts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,6 +115,9 @@ export function migrateMonitorDatabase(db) {
 
     CREATE INDEX IF NOT EXISTS idx_alerts_status_created
       ON alerts(status, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_alerts_product_created
+      ON alerts(product_id, created_at DESC);
 
     CREATE TABLE IF NOT EXISTS account_session (
       id INTEGER PRIMARY KEY CHECK (id = 1),

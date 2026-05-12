@@ -64,22 +64,70 @@ test("repository stores works, rankings, watchlist alerts, and price deltas", ()
     assert.equal(rankings.items[0].latestPriceJpy, 1200);
     assert.equal(rankings.items[0].previousPriceJpy, 2000);
     assert.equal(rankings.items[0].priceDeltaJpy, -800);
+    assert.equal(rankings.items[0].isHistoricalLow, true);
+    assert.equal(rankings.items[0].historicalLowPriceJpy, 1200);
+    assert.equal(rankings.items[0].priceSnapshotCount, 2);
 
     const alerts = repo.getAlerts({ status: "unread" });
     assert.equal(alerts.length, 1);
     assert.equal(alerts[0].type, "target_price");
+    assert.equal(alerts[0].isHistoricalLow, true);
 
     const summary = repo.getDashboardSummary();
     assert.equal(summary.totalWorks, 1);
     assert.equal(summary.watchedWorks, 1);
     assert.equal(summary.unreadAlerts, 1);
     assert.equal(summary.notableDrops.length, 1);
+    assert.equal(summary.notableDrops[0].isHistoricalLow, true);
 
     const history = repo.getWorkHistory("RJ100001");
     assert.equal(history.prices.length, 2);
     assert.equal(history.ranks.length, 2);
+    assert.deepEqual(history.priceSummary, {
+      historicalLowPriceJpy: 1200,
+      historicalLowCapturedAt: "2026-05-02T00:00:00.000Z",
+      priceSnapshotCount: 2,
+    });
   } finally {
     repo.close();
+  }
+});
+
+test("repository creates performance indexes idempotently", () => {
+  const dbPath = tempDbPath();
+  const repo = createMonitorRepository({ dbPath });
+  try {
+    const indexes = new Set(
+      repo.db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .all()
+        .map((row) => row.name)
+    );
+    for (const name of [
+      "idx_ranking_latest",
+      "idx_ranking_work_history",
+      "idx_ranking_work_latest",
+      "idx_price_history",
+      "idx_price_latest",
+      "idx_price_lowest",
+      "idx_alerts_product_created",
+      "idx_watchlist_updated",
+    ]) {
+      assert.equal(indexes.has(name), true, `${name} should exist`);
+    }
+  } finally {
+    repo.close();
+  }
+
+  const reopened = createMonitorRepository({ dbPath });
+  try {
+    assert.equal(
+      reopened.db.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'index' AND name = 'idx_price_latest'").get()
+        .count,
+      1
+    );
+  } finally {
+    reopened.close();
   }
 });
 

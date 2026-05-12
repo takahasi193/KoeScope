@@ -35,11 +35,14 @@ function createElement(selector = "") {
     querySelector(childSelector) {
       return createElement(`${selector} ${childSelector}`);
     },
+    getContext(type) {
+      return { selector, type };
+    },
     scrollIntoView() {},
   };
 }
 
-function createDashboardHarness({ running = false } = {}) {
+function createDashboardHarness({ running = false, chartFactory = undefined } = {}) {
   const elements = new Map();
   const timers = [];
   const requests = [];
@@ -78,6 +81,7 @@ function createDashboardHarness({ running = false } = {}) {
       addEventListener() {},
     },
     window: {
+      Chart: chartFactory,
       prompt: () => null,
     },
     fetch: async (url, options = {}) => {
@@ -195,6 +199,28 @@ function createDashboardHarness({ running = false } = {}) {
         body = { floor: "home", period: "week", category: "all", capturedAt: null, items: [] };
       } else if (path.startsWith("/api/alerts")) {
         body = { items: [] };
+      } else if (path.startsWith("/api/works/") && path.endsWith("/history")) {
+        body = {
+          work: {
+            productId: "RJ100001",
+            title: "Rain ASMR",
+            circle: "Local Circle",
+          },
+          priceSummary: {
+            historicalLowPriceJpy: 900,
+            historicalLowCapturedAt: "2026-05-03T00:00:00.000Z",
+            priceSnapshotCount: 3,
+          },
+          prices: [
+            { priceJpy: 1800, officialPriceJpy: 1800, capturedAt: "2026-05-01T00:00:00.000Z" },
+            { priceJpy: null, officialPriceJpy: 1800, capturedAt: "2026-05-02T00:00:00.000Z" },
+            { priceJpy: 900, officialPriceJpy: 1800, capturedAt: "2026-05-03T00:00:00.000Z" },
+          ],
+          ranks: [
+            { floor: "home", period: "week", category: "voice", rank: 12, capturedAt: "2026-05-01T00:00:00.000Z" },
+            { floor: "home", period: "week", category: "voice", rank: 4, capturedAt: "2026-05-03T00:00:00.000Z" },
+          ],
+        };
       } else if (path === "/api/watchlist") {
         body = { items: [] };
       } else if (path === "/api/sync/dlsite-rankings" && options.method === "POST") {
@@ -283,6 +309,30 @@ test("dashboard loads activities and starts manual activity refresh", async () =
 
   assert.equal(timers.at(-1).delay, 0);
   assert.equal(requests.some((request) => request.path === "/api/sync/dlsite-activities"), true);
+});
+
+test("dashboard renders history trend charts while preserving snapshot lists", async () => {
+  const chartCalls = [];
+  function FakeChart(context, config) {
+    chartCalls.push({ context, config });
+    this.destroy = () => chartCalls.push({ destroyed: config.data.datasets[0].label });
+  }
+  const { context, elements } = createDashboardHarness({ running: false, chartFactory: FakeChart });
+  await flushAsyncWork();
+
+  await vm.runInContext('showHistory("RJ100001")', context);
+  await flushAsyncWork();
+
+  assert.equal(chartCalls.length, 2);
+  assert.equal(chartCalls[0].config.data.datasets[0].label, "Price");
+  assert.deepEqual(chartCalls[0].config.data.datasets[0].data, [1800, 900]);
+  assert.equal(chartCalls[1].config.data.datasets[0].label, "Rank");
+  assert.deepEqual(chartCalls[1].config.data.datasets[0].data, [12, 4]);
+  assert.equal(chartCalls[1].config.options.scales.y.reverse, true);
+  assert.match(elements.get("#priceHistory").innerHTML, /史低/);
+  assert.match(elements.get("#rankHistory").innerHTML, /#4/);
+  assert.equal(elements.get("#priceTrendEmpty").hidden, true);
+  assert.equal(elements.get("#rankTrendEmpty").hidden, true);
 });
 
 test("dashboard account sync directs users to the extension path", async () => {

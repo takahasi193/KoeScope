@@ -835,6 +835,11 @@ textarea {
   color: var(--accent);
 }
 
+.badge.historical-low {
+  background: #eefbe7;
+  color: #287a18;
+}
+
 .row-actions {
   display: flex;
   gap: 8px;
@@ -1033,6 +1038,35 @@ textarea {
 .history-list {
   display: grid;
   gap: 8px;
+}
+
+.history-chart {
+  position: relative;
+  height: 180px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--accent-wash);
+  padding: 10px;
+}
+
+.history-chart canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.history-chart-empty {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.history-chart-empty[hidden],
+.history-chart canvas[hidden] {
+  display: none;
 }
 
 .history-row {
@@ -1513,6 +1547,12 @@ textarea:focus {
 
 .badge.drop {
   background: var(--danger-soft);
+}
+
+.badge.historical-low {
+  border-color: rgba(40, 122, 24, 0.18);
+  background: #eefbe7;
+  color: #287a18;
 }
 
 .mini-work {

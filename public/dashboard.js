@@ -71,8 +71,17 @@ const els = {
   historyMeta: document.querySelector("#historyMeta"),
   priceHistory: document.querySelector("#priceHistory"),
   rankHistory: document.querySelector("#rankHistory"),
+  priceTrendChart: document.querySelector("#priceTrendChart"),
+  rankTrendChart: document.querySelector("#rankTrendChart"),
+  priceTrendEmpty: document.querySelector("#priceTrendEmpty"),
+  rankTrendEmpty: document.querySelector("#rankTrendEmpty"),
   closeHistoryButton: document.querySelector("#closeHistoryButton"),
   toast: document.querySelector("#toast"),
+};
+
+const historyCharts = {
+  price: null,
+  rank: null,
 };
 
 function toast(message) {
@@ -110,6 +119,12 @@ function formatNumber(value) {
 function formatPrice(value) {
   const number = Number(value);
   return Number.isFinite(number) ? `${number.toLocaleString("ja-JP")}円` : "未知";
+}
+
+function toFiniteNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 function formatDate(value) {
@@ -300,6 +315,10 @@ function watchBadge(item) {
   return item.isWatched ? '<span class="badge watch">关注中</span>' : "";
 }
 
+function historicalLowBadge(item) {
+  return item?.isHistoricalLow ? '<span class="badge historical-low">史低</span>' : "";
+}
+
 function renderRankingEmptyState(categoryLabel) {
   if (!syncIsRunning()) {
     els.rankingCaption.textContent = `还没有 ${categoryLabel} 快照数据。点击同步后会显示对应排行榜。`;
@@ -368,6 +387,7 @@ function renderRankings() {
         <div class="muted-line">
           ${priceTrend(item)}
           ${discountBadge(item)}
+          ${historicalLowBadge(item)}
           <span class="badge">销售 ${formatNumber(item.latestSales)}</span>
         </div>
       </td>
@@ -397,6 +417,7 @@ function renderAlerts() {
       <div>
         <strong>${escapeHtml(alert.title || alert.productId)}</strong>
         <p>${escapeHtml(alert.message)} · ${formatDate(alert.createdAt)}</p>
+        <div class="muted-line">${historicalLowBadge(alert)}</div>
         <div class="mini-actions">
           <button class="mini-button" data-action="read-alert" data-id="${escapeAttribute(alert.id)}" type="button">已读</button>
           <button class="mini-button" data-action="history" data-id="${escapeAttribute(alert.productId)}" type="button">历史</button>
@@ -453,6 +474,7 @@ function renderDrops() {
       <div>
         <a class="mini-title" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title || item.productId)}</a>
         <p>${formatPrice(item.previousPriceJpy)} → ${formatPrice(item.latestPriceJpy)}</p>
+        <div class="muted-line">${historicalLowBadge(item)}</div>
       </div>
     `;
     els.dropList.append(node);
@@ -524,10 +546,102 @@ function renderRecommendations() {
   }
 }
 
+function destroyHistoryChart(key) {
+  if (historyCharts[key]?.destroy) historyCharts[key].destroy();
+  historyCharts[key] = null;
+}
+
+function renderHistoryChart(key, { canvas, empty, points, label, color, reverseY = false }) {
+  destroyHistoryChart(key);
+  const chartPoints = points
+    .map((point) => ({ ...point, value: toFiniteNumber(point.value) }))
+    .filter((point) => point.value !== null);
+  const hasData = chartPoints.length > 0;
+  if (empty) {
+    empty.hidden = hasData;
+    empty.textContent = hasData ? "" : "No trend data.";
+  }
+  if (canvas) canvas.hidden = !hasData;
+  if (!hasData) return;
+
+  const ChartConstructor = window.Chart;
+  const context = typeof canvas?.getContext === "function" ? canvas.getContext("2d") : null;
+  if (typeof ChartConstructor !== "function" || !context) {
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent = "Chart unavailable.";
+    }
+    if (canvas) canvas.hidden = true;
+    return;
+  }
+
+  historyCharts[key] = new ChartConstructor(context, {
+    type: "line",
+    data: {
+      labels: chartPoints.map((point) => point.label),
+      datasets: [
+        {
+          label,
+          data: chartPoints.map((point) => point.value),
+          borderColor: color,
+          backgroundColor: color,
+          borderWidth: 2,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          tension: 0.25,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { intersect: false, mode: "index" },
+      },
+      scales: {
+        x: {
+          ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 5 },
+          grid: { display: false },
+        },
+        y: {
+          reverse: reverseY,
+          ticks: { precision: 0 },
+        },
+      },
+    },
+  });
+}
+
 function renderHistory(payload) {
   els.historyPanel.hidden = false;
   els.historyTitle.textContent = payload.work.title || payload.work.productId;
   els.historyMeta.textContent = `${payload.work.productId} · ${payload.work.circle || "未知社团"}`;
+  const priceSummary = payload.priceSummary ?? {};
+
+  renderHistoryChart("price", {
+    canvas: els.priceTrendChart,
+    empty: els.priceTrendEmpty,
+    label: "Price",
+    color: "#0095ff",
+    points: (payload.prices ?? []).map((item) => ({
+      label: formatDate(item.capturedAt),
+      value: toFiniteNumber(item.priceJpy),
+    })),
+  });
+
+  renderHistoryChart("rank", {
+    canvas: els.rankTrendChart,
+    empty: els.rankTrendEmpty,
+    label: "Rank",
+    color: "#9b6200",
+    reverseY: true,
+    points: (payload.ranks ?? []).map((item) => ({
+      label: `${formatDate(item.capturedAt)} ${item.floor || ""}/${item.period || ""}`,
+      value: toFiniteNumber(item.rank),
+    })),
+  });
 
   els.priceHistory.innerHTML =
     payload.prices
@@ -537,7 +651,12 @@ function renderHistory(payload) {
         (item) => `
           <div class="history-row">
             <span>${formatDate(item.capturedAt)}</span>
-            <strong>${formatPrice(item.priceJpy)}</strong>
+            <strong>${formatPrice(item.priceJpy)}${
+              toFiniteNumber(item.priceJpy) !== null &&
+              toFiniteNumber(item.priceJpy) === toFiniteNumber(priceSummary.historicalLowPriceJpy)
+                ? ' <span class="badge historical-low">史低</span>'
+                : ""
+            }</strong>
           </div>
         `
       )
@@ -560,6 +679,8 @@ function renderHistory(payload) {
 
 function closeHistory() {
   els.historyPanel.hidden = true;
+  destroyHistoryChart("price");
+  destroyHistoryChart("rank");
 }
 
 function renderAll() {

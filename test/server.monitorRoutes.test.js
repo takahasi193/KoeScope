@@ -93,6 +93,10 @@ test("monitor routes expose sync, summary, rankings, and alerts", async () => {
     assert.equal(sync.status, 202);
     assert.equal((await sync.json()).run.status, "running");
 
+    const chartBundle = await fetch(`${baseUrl}/vendor/chart.js/chart.umd.js`);
+    assert.equal(chartBundle.status, 200);
+    assert.match(await chartBundle.text(), /Chart/);
+
     const summary = await fetch(`${baseUrl}/api/dashboard/summary`);
     assert.equal(summary.status, 200);
     const summaryPayload = await summary.json();
