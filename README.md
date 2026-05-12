@@ -1,5 +1,26 @@
 # KoeScope
 
+## React / Next.js frontend update
+
+KoeScope now includes a React + Next.js frontend in `web/`. The backend is still the existing Express 5 + SQLite service; the new frontend is a static-exported Next App Router app served by Express from `web/out` when present.
+
+What changed:
+- `web/` adds Next.js, React, TypeScript, HeroUI and the shared frontend utilities used by the search, person, dashboard and activities pages.
+- Express serves the Next static export before the legacy `public/` HTML files, while preserving the old entry URLs: `/`, `/person.html`, `/dashboard.html`, `/activities.html`, plus extension-friendly dashboard links.
+- The UI now uses an enterprise-style HeroUI layer with dark mode, polished cards, larger ranking artwork, clearer filter chips, staggered card entrance animations and a two-template switcher for Search / Monitor.
+- The Search / Monitor template switcher uses Next client routing with prefetching instead of full document reloads, so switching between the two main templates feels like a smooth horizontal page transition.
+- Existing `/api/*`, SQLite storage, scheduler behavior and Chrome companion extension contracts remain unchanged.
+
+Frontend commands:
+```bash
+npm run web:dev      # run the Next frontend dev server
+npm run web:build    # build the static export into web/out
+npm run web:test     # run frontend mapper/client tests
+npm test             # run backend tests, then web:test
+```
+
+When changing frontend code, run `npm run web:build` before starting the Express app if you want `http://localhost:5178` to serve the latest static UI. Generated folders such as `web/.next/`, `web/out/` and `web/next-env.d.ts` are intentionally ignored by git.
+
 本地 DLsite 辅助应用。输入声优名或马甲后，应用会从 Bangumi 人物资料中解析别名，再按别名渐进式搜索 DLsite 公开结果；同时提供本地 Monitor，用 SQLite 保存排行榜、价格快照、关注列表、账号同步摘要、活动提醒和可能相关的优惠活动。
 
 ## 功能
