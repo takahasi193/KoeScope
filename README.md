@@ -21,6 +21,28 @@ npm test             # run backend tests, then web:test
 
 When changing frontend code, run `npm run web:build` before starting the Express app if you want `http://localhost:5178` to serve the latest static UI. Generated folders such as `web/.next/`, `web/out/` and `web/next-env.d.ts` are intentionally ignored by git.
 
+## UI 截图
+
+以下截图来自本地静态前端和临时空数据库，用于说明界面布局，不包含个人账号、愿望单或收藏数据。
+
+### 搜索工作台
+
+![KoeScope 搜索工作台](docs/screenshots/koescope-search.png)
+
+首页直接进入声优作品搜索工作台：上方是声优名/马甲输入、人物解析、DLsite 搜索和 R18 合法确认；下方按候选人物、别名选择和结果列表分区，方便先解析人物，再逐步补齐搜索结果。
+
+### Monitor 仪表盘
+
+![KoeScope Monitor 仪表盘](docs/screenshots/koescope-monitor.png)
+
+Monitor 聚合本地 SQLite 数据：顶部指标条展示作品、折扣、关注、提醒、点数与活动数量；中间保留 DLsite 活动摘要；下方继续呈现排行榜、账号同步、点数推荐、提醒、关注作品和数据维护入口。
+
+### 活动中心
+
+![KoeScope 活动中心](docs/screenshots/koescope-activities.png)
+
+活动中心用于集中浏览 DLsite 公开活动：指标条显示当前结果和提醒数量；筛选区支持福利类型、状态、关键词和“只看与我相关”；活动列表会把公开活动摘要、本地相关性和已读状态放在同一个页面中处理。
+
 本地 DLsite 辅助应用。输入声优名或马甲后，应用会从 Bangumi 人物资料中解析别名，再按别名渐进式搜索 DLsite 公开结果；同时提供本地 Monitor，用 SQLite 保存排行榜、价格快照、关注列表、账号同步摘要、活动提醒和可能相关的优惠活动。
 
 ## 功能
