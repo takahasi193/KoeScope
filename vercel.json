@@ -4,6 +4,15 @@
   "functions": {
     "api/public-search-cache.js": {
       "maxDuration": 5
+    },
+    "api/public-search-refresh.js": {
+      "maxDuration": 5
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/public-search-refresh",
+      "schedule": "0 */6 * * *"
+    }
+  ]
 }

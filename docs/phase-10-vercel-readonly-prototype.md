@@ -5,7 +5,7 @@ This prototype adds a Vercel deployment boundary for the exported Next frontend 
 ## Deployment Shape
 
 - `vercel.json` runs `npm run web:build` and serves only `web/out` as the frontend output.
-- The only Vercel function in this prototype is `api/public-search-cache.js`.
+- The initial Vercel read function is `api/public-search-cache.js`; later Phase 10 refresh work may add public-only cron dispatch functions under the same boundary.
 - The function route is `GET /api/public-search-cache?queryKey=<public-query-key>`.
 - `HEAD` is accepted for lightweight cache checks. Mutating methods return `405`.
 - The function uses Vercel edge cache-friendly headers: `public, max-age=0, s-maxage=60, stale-while-revalidate=600`.

@@ -130,12 +130,16 @@ test("read-only public cache API rejects unsafe and mutating requests", async ()
   assert.equal(reads, 0);
 });
 
-test("Vercel prototype config builds only the exported frontend and read-only function", async () => {
+test("Vercel prototype config builds the exported frontend and public serverless functions", async () => {
   const config = JSON.parse(fs.readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
   assert.equal(config.buildCommand, "npm run web:build");
   assert.equal(config.outputDirectory, "web/out");
-  assert.deepEqual(Object.keys(config.functions), ["api/public-search-cache.js"]);
+  assert.deepEqual(Object.keys(config.functions).sort(), [
+    "api/public-search-cache.js",
+    "api/public-search-refresh.js",
+  ]);
   assert.equal(config.functions["api/public-search-cache.js"].maxDuration, 5);
+  assert.equal(config.functions["api/public-search-refresh.js"].maxDuration, 5);
 });
 
 test("Vercel public cache function serves configured public JSON without local state", async () => {
