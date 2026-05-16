@@ -1,6 +1,7 @@
 import { getPerson, searchPersons } from "../../lib/bangumi.js";
 import { normalizeSpace } from "../../lib/cache.js";
 import { normalizeSearchOrder, searchOrderLabel } from "../../lib/dlsite.js";
+import { createPublicSearchQuery } from "../../lib/searchCacheKey.js";
 import { asyncHandler } from "../http.js";
 import {
   readOptionalScope,
@@ -170,6 +171,13 @@ export function registerSearchRoutes(app, { monitor, searchHistory, searchJobSto
         person,
         selectedAliasValues,
         options,
+        cache: createPublicSearchQuery({
+          keyword,
+          personId: person.id ?? personId,
+          aliases: selectedAliasValues,
+          scope,
+          order,
+        }),
       });
       res.status(202).json(payload);
     })

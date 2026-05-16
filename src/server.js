@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDlsiteMonitor } from "./lib/monitor/service.js";
+import { createPublicSearchCacheRepository } from "./lib/publicSearchCacheRepository.js";
 import { createSearchHistoryRepository } from "./lib/searchHistoryRepository.js";
 import { createSearchJobStore } from "./lib/searchJobs.js";
 import { registerErrorHandler } from "./server/http.js";
@@ -69,11 +70,17 @@ function mountFrontend(app) {
   app.use(express.static(PUBLIC_ROOT));
 }
 
-export function createApp({ monitor = null, searchHistory = null, searchJobStore = null } = {}) {
+export function createApp({ monitor = null, searchHistory = null, searchJobStore = null, searchCache = null } = {}) {
   const resolvedSearchHistory = searchHistory ?? createSearchHistoryRepository();
+  const resolvedSearchCache =
+    searchCache ?? (resolvedSearchHistory?.db ? createPublicSearchCacheRepository({ db: resolvedSearchHistory.db }) : null);
   const resolvedMonitor = monitor ?? createDlsiteMonitor({ searchHistoryRepository: resolvedSearchHistory });
   const resolvedSearchJobStore =
-    searchJobStore ?? createSearchJobStore({ searchHistoryRepository: resolvedSearchHistory });
+    searchJobStore ??
+    createSearchJobStore({
+      searchHistoryRepository: resolvedSearchHistory,
+      searchCacheRepository: resolvedSearchCache,
+    });
   const app = express();
 
   app.use(express.json({ limit: "5mb" }));

@@ -211,6 +211,20 @@ export function migrateMonitorDatabase(db) {
     CREATE INDEX IF NOT EXISTS idx_search_session_results_session_order
       ON search_session_results(search_session_id, display_order ASC, source_order ASC);
 
+    CREATE TABLE IF NOT EXISTS public_search_cache (
+      query_key TEXT PRIMARY KEY,
+      query_version TEXT NOT NULL,
+      public_query_json TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      cached_at TEXT NOT NULL,
+      expires_at TEXT,
+      updated_at TEXT NOT NULL,
+      source_adapter TEXT NOT NULL DEFAULT 'local-sqlite'
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_public_search_cache_freshness
+      ON public_search_cache(expires_at ASC, cached_at DESC);
+
     CREATE TABLE IF NOT EXISTS activity_sync_runs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       status TEXT NOT NULL,

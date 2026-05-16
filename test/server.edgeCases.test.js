@@ -304,6 +304,71 @@ test("server searches the typed keyword before selected Bangumi aliases", async 
   });
 });
 
+test("server creates public search cache metadata without local private fields", async () => {
+  let createdJob = null;
+  const searchJobStore = {
+    create: (job) => {
+      createdJob = job;
+      return {
+        keyword: job.keyword,
+        person: job.person,
+        searchedAliases: job.selectedAliasValues,
+        options: job.options,
+        cache: job.cache,
+        progress: { jobId: "cache-boundary-search", status: "completed", isComplete: true },
+        total: 0,
+        items: [],
+      };
+    },
+    get: () => null,
+  };
+  const app = createApp({
+    monitor: createMockMonitor(),
+    searchHistory: createMockSearchHistory(),
+    searchJobStore,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/search/progressive`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        keyword: " Aoyama   Yukari ",
+        personId: 123,
+        person: {
+          id: 123,
+          name: "Aoyama Yukari",
+          image: "https://private.example/person.jpg",
+          aliases: [{ value: "Yukari" }],
+        },
+        aliases: ["Yukari", "Aoyama Yukari"],
+        scope: "all",
+        order: "dl_d",
+        accountSession: "private-cookie",
+        purchaseHistory: ["RJ100001"],
+        watchlist: ["RJ100002"],
+        annotations: { RJ100003: "local note" },
+      }),
+    });
+
+    assert.equal(response.status, 202);
+    const payload = await response.json();
+    assert.equal(payload.cache.queryKey, createdJob.cache.queryKey);
+    assert.deepEqual(createdJob.cache.publicQuery, {
+      version: "dlsite-search-v1",
+      keyword: "aoyama yukari",
+      personId: 123,
+      aliases: ["aoyama yukari", "yukari"],
+      scope: "all",
+      order: "dl_d",
+    });
+    assert.equal(Object.hasOwn(createdJob.cache.publicQuery, "accountSession"), false);
+    assert.equal(Object.hasOwn(createdJob.cache.publicQuery, "purchaseHistory"), false);
+    assert.equal(Object.hasOwn(createdJob.cache.publicQuery, "watchlist"), false);
+    assert.equal(Object.hasOwn(createdJob.cache.publicQuery, "annotations"), false);
+  });
+});
+
 test("server validates watchlist import payloads before using the monitor", async () => {
   const app = createApp({ monitor: createMockMonitor(), searchHistory: createMockSearchHistory() });
   await withServer(app, async (baseUrl) => {

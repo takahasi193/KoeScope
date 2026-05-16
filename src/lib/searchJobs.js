@@ -6,6 +6,7 @@ import {
   summarizeAgeGroups,
   verifyDlsiteItems,
 } from "./dlsite.js";
+import { createPublicSearchQuery, withSearchCacheRuntimeState } from "./searchCacheKey.js";
 
 const DEFAULT_JOB_TTL_MS = 1000 * 60 * 30;
 const DEFAULT_SEARCH_CONCURRENCY = 3;
@@ -62,6 +63,7 @@ export function createSearchJobStore({
   concurrency = DEFAULT_SEARCH_CONCURRENCY,
   minDelayMs = DEFAULT_MIN_DELAY_MS,
   searchHistoryRepository = null,
+  searchCacheRepository = null,
   persistIntervalMs = 1500,
 } = {}) {
   const jobs = new Map();
@@ -88,6 +90,11 @@ export function createSearchJobStore({
       person: job.person,
       searchedAliases: job.selectedAliasValues,
       options: job.options,
+      cache: withSearchCacheRuntimeState(job.cache, {
+        jobId: job.id,
+        status: job.status,
+        updatedAt: job.updatedAt,
+      }),
       timing: {
         totalMs: (job.completedAt ?? Date.now()) - job.startedAt,
       },
@@ -120,6 +127,18 @@ export function createSearchJobStore({
       job.lastPersistedAt = now;
     } catch (error) {
       console.error("Failed to persist search results:", error);
+    }
+  }
+
+  function persistPublicCache(job) {
+    if (!searchCacheRepository?.saveSearchResult) return;
+    try {
+      const payload = serialize(job);
+      searchCacheRepository.saveSearchResult(payload, {
+        cachedAt: payload.progress.updatedAt,
+      });
+    } catch (error) {
+      console.error("Failed to persist public search cache:", error);
     }
   }
 
@@ -170,6 +189,7 @@ export function createSearchJobStore({
         job.completedAt = Date.now();
         job.updatedAt = job.completedAt;
         persist(job, { force: true });
+        persistPublicCache(job);
       } catch (error) {
         job.status = "failed";
         job.error = error.message;
@@ -181,11 +201,18 @@ export function createSearchJobStore({
     })();
   }
 
-  function create({ keyword, person, selectedAliasValues, options }) {
+  function create({ keyword, person, selectedAliasValues, options, cache = null }) {
     cleanup();
 
     const now = Date.now();
     const id = randomUUID();
+    const searchCache = cache ?? createPublicSearchQuery({
+      keyword,
+      personId: person?.id,
+      aliases: selectedAliasValues,
+      scope: options.scope,
+      order: options.order,
+    });
     const job = {
       id,
       status: "running",
@@ -196,6 +223,7 @@ export function createSearchJobStore({
       person,
       selectedAliasValues,
       options,
+      cache: searchCache,
       completedAliases: 0,
       totalPageBudget: selectedAliasValues.length * searchFloorCount(options.scope) * options.maxPagesPerAlias,
       aliasResults: selectedAliasValues.map((alias) => createPendingAliasResult(alias, options.order)),
