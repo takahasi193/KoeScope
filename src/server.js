@@ -95,6 +95,7 @@ export function createApp({ monitor = null, searchHistory = null, searchJobStore
     monitor: resolvedMonitor,
     searchHistory: resolvedSearchHistory,
     searchJobStore: resolvedSearchJobStore,
+    searchCache: resolvedSearchCache,
   });
   registerMonitorRoutes(app, { monitor: resolvedMonitor });
   registerActivityRoutes(app, { monitor: resolvedMonitor });

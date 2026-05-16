@@ -1,7 +1,7 @@
 import { getPerson, searchPersons } from "../../lib/bangumi.js";
 import { normalizeSpace } from "../../lib/cache.js";
 import { normalizeSearchOrder, searchOrderLabel } from "../../lib/dlsite.js";
-import { createPublicSearchQuery } from "../../lib/searchCacheKey.js";
+import { createPublicSearchQuery, withSearchCacheRuntimeState } from "../../lib/searchCacheKey.js";
 import { asyncHandler } from "../http.js";
 import {
   readOptionalScope,
@@ -119,7 +119,38 @@ async function resolveSearchPerson({ keyword, personId, requestedAliases, reques
   }
 }
 
-export function registerSearchRoutes(app, { monitor, searchHistory, searchJobStore }) {
+function readPreferCache(value) {
+  return value === true || value === "true" || value === "1";
+}
+
+function readCachedSearchPayload(searchCache, queryKey) {
+  if (!searchCache?.getSearchResult) return null;
+  try {
+    return searchCache.getSearchResult(queryKey);
+  } catch {
+    return null;
+  }
+}
+
+function cachePayloadWithBackgroundRefresh(cachedPayload, refreshPayload) {
+  const refresh = refreshPayload?.cache?.refresh ?? {};
+  const jobId = refresh.jobId || refreshPayload?.progress?.jobId || "";
+  const status = refresh.status || refreshPayload?.progress?.status || "running";
+  return {
+    ...cachedPayload,
+    cache: withSearchCacheRuntimeState(cachedPayload.cache, {
+      jobId,
+      status,
+      updatedAt: refresh.updatedAt ?? refreshPayload?.progress?.updatedAt ?? null,
+    }),
+    backgroundRefresh: {
+      jobId,
+      status,
+    },
+  };
+}
+
+export function registerSearchRoutes(app, { monitor, searchHistory, searchJobStore, searchCache = null }) {
   app.post(
     "/api/persons",
     asyncHandler(async (req, res) => {
@@ -166,19 +197,24 @@ export function registerSearchRoutes(app, { monitor, searchHistory, searchJobSto
         perPage,
       };
 
+      const cache = createPublicSearchQuery({
+        keyword,
+        personId: person.id ?? personId,
+        aliases: selectedAliasValues,
+        scope,
+        order,
+      });
+      const cachedPayload = readPreferCache(req.body.preferCache)
+        ? readCachedSearchPayload(searchCache, cache.queryKey)
+        : null;
       const payload = searchJobStore.create({
         keyword,
         person,
         selectedAliasValues,
         options,
-        cache: createPublicSearchQuery({
-          keyword,
-          personId: person.id ?? personId,
-          aliases: selectedAliasValues,
-          scope,
-          order,
-        }),
+        cache,
       });
+      if (cachedPayload) return res.status(202).json(cachePayloadWithBackgroundRefresh(cachedPayload, payload));
       res.status(202).json(payload);
     })
   );
