@@ -1,71 +1,12 @@
 import { normalizeSpace } from "./cache.js";
 import { openMonitorDatabase } from "./monitor/db/connection.js";
 import { asJson, parseJson } from "./monitor/db/utils.js";
+import { buildPublicSearchCachePayload } from "./publicSearchCachePayload.js";
 import { withSearchCacheRuntimeState } from "./searchCacheKey.js";
 
 const DEFAULT_PUBLIC_SEARCH_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 
-const PUBLIC_PERSON_FIELDS = [
-  "id",
-  "name",
-  "image",
-  "career",
-  "type",
-  "personCategory",
-  "personCategoryLabel",
-  "sourceUrl",
-  "dataSource",
-];
-const PUBLIC_ALIAS_FIELDS = ["value", "type", "isPenName", "sources", "sourceKeys"];
-const PUBLIC_OPTION_FIELDS = [
-  "scope",
-  "order",
-  "orderLabel",
-  "verifyDetails",
-  "maxAliases",
-  "maxPagesPerAlias",
-  "perPage",
-];
-const PUBLIC_PROGRESS_FIELDS = [
-  "status",
-  "isComplete",
-  "completedAliases",
-  "totalAliases",
-  "pagesFetched",
-  "totalPageBudget",
-  "updatedAt",
-];
-const PUBLIC_QUERY_FIELDS = ["version", "keyword", "personId", "aliases", "scope", "order"];
-const PUBLIC_ITEM_FIELDS = [
-  "productId",
-  "title",
-  "url",
-  "image",
-  "imageUrl",
-  "circle",
-  "circleUrl",
-  "floor",
-  "type",
-  "typeLabel",
-  "ageCategory",
-  "ageLabel",
-  "category",
-  "priceJpy",
-  "sales",
-  "ratingCount",
-  "matchedAliases",
-  "matchedPages",
-  "sourceOrder",
-  "verification",
-];
-
-function pickFields(source, fields) {
-  const result = {};
-  for (const field of fields) {
-    if (source?.[field] !== undefined) result[field] = source[field];
-  }
-  return result;
-}
+export { buildPublicSearchCachePayload } from "./publicSearchCachePayload.js";
 
 function toIsoTime(value) {
   if (value instanceof Date) return value.toISOString();
@@ -86,48 +27,6 @@ function toExpiresAt(cachedAt, ttlMs) {
 function isExpired(row, now) {
   if (!row?.expires_at) return false;
   return Date.parse(row.expires_at) <= Date.parse(toIsoTime(now));
-}
-
-function publicPerson(person = {}) {
-  const result = pickFields(person, PUBLIC_PERSON_FIELDS);
-  if (Array.isArray(person.aliases)) {
-    result.aliases = person.aliases.map((alias) => pickFields(alias, PUBLIC_ALIAS_FIELDS));
-  }
-  return result;
-}
-
-function publicWorkItem(item = {}) {
-  return pickFields(item, PUBLIC_ITEM_FIELDS);
-}
-
-function publicCacheMetadata(cache = {}) {
-  return {
-    queryKey: normalizeSpace(cache.queryKey),
-    queryVersion: normalizeSpace(cache.queryVersion),
-    publicQuery: pickFields(cache.publicQuery ?? {}, PUBLIC_QUERY_FIELDS),
-  };
-}
-
-export function buildPublicSearchCachePayload(payload = {}) {
-  return {
-    keyword: normalizeSpace(payload.keyword),
-    person: publicPerson(payload.person),
-    searchedAliases: Array.isArray(payload.searchedAliases) ? payload.searchedAliases.map(normalizeSpace) : [],
-    options: pickFields(payload.options ?? {}, PUBLIC_OPTION_FIELDS),
-    cache: publicCacheMetadata(payload.cache),
-    timing: payload.timing ?? {},
-    progress: pickFields(payload.progress ?? {}, PUBLIC_PROGRESS_FIELDS),
-    total: Number(payload.total) || 0,
-    items: Array.isArray(payload.items) ? payload.items.map(publicWorkItem) : [],
-    order: normalizeSpace(payload.order),
-    orderLabel: normalizeSpace(payload.orderLabel),
-    groups: payload.groups ?? {},
-    ageGroups: payload.ageGroups ?? {},
-    aliasSummaries: Array.isArray(payload.aliasSummaries) ? payload.aliasSummaries : [],
-    truncated: Boolean(payload.truncated),
-    truncatedAliases: Array.isArray(payload.truncatedAliases) ? payload.truncatedAliases : [],
-    errors: Array.isArray(payload.errors) ? payload.errors : [],
-  };
 }
 
 function mapCacheRow(row, { now = new Date() } = {}) {

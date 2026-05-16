@@ -1,0 +1,9 @@
+{
+  "buildCommand": "npm run web:build",
+  "outputDirectory": "web/out",
+  "functions": {
+    "api/public-search-cache.js": {
+      "maxDuration": 5
+    }
+  }
+}
