@@ -92,7 +92,7 @@ export function createApp({ monitor = null, searchHistory = null, searchJobStore
   registerMonitorRoutes(app, { monitor: resolvedMonitor });
   registerActivityRoutes(app, { monitor: resolvedMonitor });
   registerAccountRoutes(app, { monitor: resolvedMonitor });
-  registerMaintenanceRoutes(app, { monitor: resolvedMonitor });
+  registerMaintenanceRoutes(app, { monitor: resolvedMonitor, searchHistory: resolvedSearchHistory });
   registerErrorHandler(app);
 
   return app;

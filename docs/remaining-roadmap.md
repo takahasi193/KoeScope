@@ -58,3 +58,11 @@ Completed baseline:
 
 - [x] Direct keyword search: allow `/api/search/progressive` to start from the typed keyword without requiring a Bangumi candidate, and always search the typed keyword before selected Bangumi aliases. Done 2026-05-16 on branch `optimize/phase-7-dashboard-foundation`.
 - [x] General Bangumi person search: allow Bangumi lookup beyond voice actors, classify candidate people by career/type, pass those categories into DLsite person searches, and keep voice-actor pen-name selection as a sub-mode. Done 2026-05-16 on branch `feature/general-person-search`.
+
+## Phase 9: Local Aggregation And Storage Pressure
+
+- [x] Dashboard state sections: split `/api/dashboard/state` into opt-in sections so ordinary Dashboard refreshes do not run maintenance previews or heavy recommendation queries, while keeping the legacy full aggregate response compatible. Done 2026-05-16 on branch `optimize/local-pressure`.
+- [x] Dashboard lazy loading: make Next and legacy Dashboard load the first screen from lightweight sections, defer watchlist/recommendations/bundles, trigger maintenance preview only from the explicit preview action, and lazy-load Chart.js only when history charts are opened. Done 2026-05-16 on branch `optimize/local-pressure`.
+- [x] Image cache maintenance: add dry-run and execute cleanup for `public/cache/`, protecting currently referenced work/activity images while bounding old unreferenced files and total cache size. Done 2026-05-16 on branch `optimize/local-pressure`.
+- [x] Search history maintenance: add dry-run and execute cleanup for old local search history/results with conservative per-person and subscription-aware retention; do not touch account, purchase, watchlist, subscription, or annotation data. Done 2026-05-16 on branch `optimize/local-pressure`.
+- [x] Future deployment spike: keep Vercel as a later standalone investigation; local SQLite, local cache writes, Chrome Companion imports, account cookies, and scheduled scraping stay local-first for this phase. Done 2026-05-16 on branch `optimize/local-pressure`; retained as a future independent deployment evaluation rather than core Phase 9 scope.

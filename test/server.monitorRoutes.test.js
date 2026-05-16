@@ -2,16 +2,30 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createApp } from "../src/server.js";
 
-function createMockMonitor() {
+function createMockMonitor({ calls = null } = {}) {
   let annotation = { note: "", tags: [], status: "", createdAt: null, updatedAt: null };
   let subscription = null;
+  function count(name) {
+    if (!calls) return;
+    calls[name] = (calls[name] ?? 0) + 1;
+  }
   return {
     startSync: () => ({ alreadyRunning: false, run: { id: 1, status: "running" } }),
     startActivitySync: () => ({ alreadyRunning: false, run: { id: 2, status: "running" } }),
-    getStatus: () => ({ running: false, latestRun: null, nextScheduledAt: "2026-05-09T00:00:00.000Z" }),
-    getActivityStatus: () => ({ running: false, latestRun: null, nextScheduledAt: "2026-05-09T06:00:00.000Z" }),
-    getDashboardSummary: () => ({ totalWorks: 0, unreadAlerts: 0, activeActivities: 1, unreadActivityAlerts: 1, notableDrops: [] }),
+    getStatus: () => {
+      count("getStatus");
+      return { running: false, latestRun: null, nextScheduledAt: "2026-05-09T00:00:00.000Z" };
+    },
+    getActivityStatus: () => {
+      count("getActivityStatus");
+      return { running: false, latestRun: null, nextScheduledAt: "2026-05-09T06:00:00.000Z" };
+    },
+    getDashboardSummary: () => {
+      count("getDashboardSummary");
+      return { totalWorks: 0, unreadAlerts: 0, activeActivities: 1, unreadActivityAlerts: 1, notableDrops: [] };
+    },
     getActivityAlertSummary: ({ limit }) => ({
+      ...(count("getActivityAlertSummary") ?? {}),
       generatedAt: "2026-05-10T00:00:00.000Z",
       activeActivities: 2,
       endingSoonActivities: 1,
@@ -28,34 +42,43 @@ function createMockMonitor() {
         },
       ].slice(0, limit),
     }),
-    getActivities: (query) => ({
-      ...query,
-      generatedAt: "2026-05-10T00:00:00.000Z",
-      unreadCount: 1,
-      account: { hasSession: false, pointsJpy: null },
-      personalSummary: {
-        syncState: "disconnected",
-        activeBenefitCounts: { coupon: 1, all: 1 },
-        relatedWorks: { totalMatches: 1, claimsEntitlement: false },
-        entrypoints: [{ benefit: "coupon", count: 1, claimsEntitlement: false }],
-      },
-      activityMatches: { totalMatches: 1, claimsEntitlement: false },
-      filters: query,
-      items: [
-        {
-          activityId: "dlsite:1",
-          benefitType: query.benefit,
-          title: "Campaign",
-          relatedWorks: [{ productId: "RJ100001", claimsEntitlement: false }],
+    getActivities: (query) => {
+      count("getActivities");
+      return {
+        ...query,
+        generatedAt: "2026-05-10T00:00:00.000Z",
+        unreadCount: 1,
+        account: { hasSession: false, pointsJpy: null },
+        personalSummary: {
+          syncState: "disconnected",
+          activeBenefitCounts: { coupon: 1, all: 1 },
+          relatedWorks: { totalMatches: 1, claimsEntitlement: false },
+          entrypoints: [{ benefit: "coupon", count: 1, claimsEntitlement: false }],
         },
-      ],
-    }),
-    getRankings: (query) => ({ ...query, capturedAt: null, items: [] }),
+        activityMatches: { totalMatches: 1, claimsEntitlement: false },
+        filters: query,
+        items: [
+          {
+            activityId: "dlsite:1",
+            benefitType: query.benefit,
+            title: "Campaign",
+            relatedWorks: [{ productId: "RJ100001", claimsEntitlement: false }],
+          },
+        ],
+      };
+    },
+    getRankings: (query) => {
+      count("getRankings");
+      return { ...query, capturedAt: null, items: [] };
+    },
     getWorkHistory: () => null,
     addWatchlist: ({ productId }) => ({ productId, targetPriceJpy: null }),
     importWorkToWatchlist: ({ work }) => ({ productId: work.productId, targetPriceJpy: null }),
     deleteWatchlist: () => true,
-    getWatchlist: () => [],
+    getWatchlist: () => {
+      count("getWatchlist");
+      return [];
+    },
     getWorkAnnotation: (productId) => ({ productId: String(productId).toUpperCase(), ...annotation }),
     saveWorkAnnotation: ({ productId, note, tags, status }) => {
       annotation = {
@@ -102,31 +125,65 @@ function createMockMonitor() {
         lastNewItemCount: 1,
       },
     }),
-    getAlerts: () => [],
+    getAlerts: () => {
+      count("getAlerts");
+      return [];
+    },
     markAlertRead: () => true,
     markActivityAlertRead: () => true,
-    getAccountProfile: () => ({ hasSession: false, pointsJpy: null, lists: {} }),
+    getAccountProfile: () => {
+      count("getAccountProfile");
+      return { hasSession: false, pointsJpy: null, lists: {} };
+    },
     getAccountSyncState: () => ({ generatedAt: "2026-05-10T00:00:00.000Z", lists: { wishlist: { count: 1, productIds: ["RJ100001"] } } }),
     saveAccountSession: () => ({ hasSession: true, pointsJpy: null, lists: {} }),
     syncAccount: () => ({ profile: { hasSession: true, pointsJpy: 1000, lists: {} }, lists: [] }),
     importAccountPages: () => ({ profile: { hasSession: true, pointsJpy: 1000, lists: {} }, lists: [] }),
     clearAccountSession: () => ({ hasSession: false, pointsJpy: null, lists: {} }),
-    getAffordableRecommendations: () => ({ budgetJpy: 1000, items: [] }),
-    getBundleRecommendations: () => ({
-      budgetJpy: 1000,
-      items: [{ circle: "Local Circle", totalPriceJpy: 900, itemCount: 2, claimsCheckoutOptimization: false }],
-      disclaimer: "Local public-price analysis only.",
-    }),
-    runSnapshotCleanup: ({ dryRun, retentionDays = 365 }) => ({
-      dryRun,
-      retentionDays,
-      cutoffAt: "2025-05-12T00:00:00.000Z",
-      priceSnapshots: { olderThanCutoff: 2, protectedOlder: 1, deletable: 1, deleted: dryRun ? 0 : 1 },
-      rankingSnapshots: { olderThanCutoff: 3, protectedOlder: 1, deletable: 2, deleted: dryRun ? 0 : 2 },
-      totalDeletable: 3,
-      totalDeleted: dryRun ? 0 : 3,
-      optimization: { pragmaOptimize: !dryRun, vacuum: false },
-    }),
+    getAffordableRecommendations: () => {
+      count("getAffordableRecommendations");
+      return { budgetJpy: 1000, items: [] };
+    },
+    getBundleRecommendations: () => {
+      count("getBundleRecommendations");
+      return {
+        budgetJpy: 1000,
+        items: [{ circle: "Local Circle", totalPriceJpy: 900, itemCount: 2, claimsCheckoutOptimization: false }],
+        disclaimer: "Local public-price analysis only.",
+      };
+    },
+    runSnapshotCleanup: ({ dryRun, retentionDays = 365 }) => {
+      count("runSnapshotCleanup");
+      return {
+        dryRun,
+        retentionDays,
+        cutoffAt: "2025-05-12T00:00:00.000Z",
+        priceSnapshots: { olderThanCutoff: 2, protectedOlder: 1, deletable: 1, deleted: dryRun ? 0 : 1 },
+        rankingSnapshots: { olderThanCutoff: 3, protectedOlder: 1, deletable: 2, deleted: dryRun ? 0 : 2 },
+        totalDeletable: 3,
+        totalDeleted: dryRun ? 0 : 3,
+        optimization: { pragmaOptimize: !dryRun, vacuum: false },
+      };
+    },
+    runImageCacheCleanup: ({ dryRun, retentionDays = 30, maxBytes = 536870912 }) => {
+      count("runImageCacheCleanup");
+      return {
+        dryRun,
+        retentionDays,
+        maxBytes,
+        cutoffAt: "2026-04-16T00:00:00.000Z",
+        totalFiles: 2,
+        totalBytes: 30,
+        protectedFiles: 1,
+        protectedBytes: 20,
+        unreferencedFiles: 1,
+        oldUnreferencedFiles: 1,
+        deletableFiles: 1,
+        deletableBytes: 10,
+        deletedFiles: dryRun ? 0 : 1,
+        deletedBytes: dryRun ? 0 : 10,
+      };
+    },
   };
 }
 
@@ -137,6 +194,19 @@ function createMockSearchHistory() {
     getPersonSearches: () => ({ items: [] }),
     getPersonProfile: () => null,
     getPersonWorks: () => null,
+    runSearchHistoryCleanup: ({ dryRun, retentionDays = 180, keepPerPerson = 20, keepAnonymous = 20 }) => ({
+      dryRun,
+      retentionDays,
+      keepPerPerson,
+      keepAnonymous,
+      cutoffAt: "2025-11-17T00:00:00.000Z",
+      oldSessions: 9,
+      protectedSessions: 4,
+      deletableSessions: 5,
+      deletableResults: 12,
+      deletedSessions: dryRun ? 0 : 5,
+      deletedResults: dryRun ? 0 : 12,
+    }),
   };
 }
 
@@ -310,5 +380,77 @@ test("monitor routes expose sync, summary, rankings, and alerts", async () => {
     const maintenanceRunPayload = await maintenanceRun.json();
     assert.equal(maintenanceRunPayload.totalDeleted, 3);
     assert.equal(maintenanceRunPayload.optimization.pragmaOptimize, true);
+
+    const imageCachePreview = await fetch(`${baseUrl}/api/maintenance/image-cache?retentionDays=30&maxBytes=1024`);
+    assert.equal(imageCachePreview.status, 200);
+    const imageCachePreviewPayload = await imageCachePreview.json();
+    assert.equal(imageCachePreviewPayload.dryRun, true);
+    assert.equal(imageCachePreviewPayload.deletableFiles, 1);
+    assert.equal(imageCachePreviewPayload.maxBytes, 1024);
+
+    const imageCacheRun = await fetch(`${baseUrl}/api/maintenance/image-cache`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dryRun: false, retentionDays: 30, maxBytes: 1024 }),
+    });
+    assert.equal(imageCacheRun.status, 200);
+    const imageCacheRunPayload = await imageCacheRun.json();
+    assert.equal(imageCacheRunPayload.deletedFiles, 1);
+    assert.equal(imageCacheRunPayload.deletedBytes, 10);
+
+    const searchHistoryPreview = await fetch(`${baseUrl}/api/maintenance/search-history?retentionDays=180`);
+    assert.equal(searchHistoryPreview.status, 200);
+    const searchHistoryPreviewPayload = await searchHistoryPreview.json();
+    assert.equal(searchHistoryPreviewPayload.dryRun, true);
+    assert.equal(searchHistoryPreviewPayload.deletableSessions, 5);
+    assert.equal(searchHistoryPreviewPayload.keepPerPerson, 20);
+
+    const searchHistoryRun = await fetch(`${baseUrl}/api/maintenance/search-history`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dryRun: false, retentionDays: 180 }),
+    });
+    assert.equal(searchHistoryRun.status, 200);
+    const searchHistoryRunPayload = await searchHistoryRun.json();
+    assert.equal(searchHistoryRunPayload.deletedSessions, 5);
+    assert.equal(searchHistoryRunPayload.deletedResults, 12);
+  });
+});
+
+test("dashboard state supports opt-in sections without running omitted heavy sections", async () => {
+  const calls = {};
+  const app = createApp({ monitor: createMockMonitor({ calls }), searchHistory: createMockSearchHistory() });
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(
+      `${baseUrl}/api/dashboard/state?sections=summary,statuses,activities,rankings,alerts,account&floor=maniax&period=month&category=voice`
+    );
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+
+    assert.deepEqual(Object.keys(payload).sort(), [
+      "account",
+      "activities",
+      "activityStatus",
+      "alerts",
+      "rankings",
+      "summary",
+      "syncStatus",
+    ]);
+    assert.equal(payload.summary.activeActivities, 1);
+    assert.equal(payload.activityStatus.nextScheduledAt, "2026-05-09T06:00:00.000Z");
+    assert.equal(payload.rankings.floor, "maniax");
+    assert.equal(calls.runSnapshotCleanup ?? 0, 0);
+    assert.equal(calls.getAffordableRecommendations ?? 0, 0);
+    assert.equal(calls.getBundleRecommendations ?? 0, 0);
+    assert.equal(calls.getWatchlist ?? 0, 0);
+  });
+});
+
+test("dashboard state rejects unknown sections", async () => {
+  const app = createApp({ monitor: createMockMonitor(), searchHistory: createMockSearchHistory() });
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/dashboard/state?sections=summary,unknown`);
+    assert.equal(response.status, 400);
+    assert.match((await response.json()).error, /Unknown dashboard state section/);
   });
 });

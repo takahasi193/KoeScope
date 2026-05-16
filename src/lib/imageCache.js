@@ -8,6 +8,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DEFAULT_PUBLIC_ROOT = path.join(__dirname, "..", "..", "public");
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"]);
+const DEFAULT_IMAGE_CACHE_RETENTION_DAYS = 30;
+const DEFAULT_IMAGE_CACHE_MAX_BYTES = 512 * 1024 * 1024;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function normalizeRemoteImageUrl(value) {
   const text = String(value ?? "").trim();
@@ -47,6 +50,137 @@ export function publicCachePathForUrl(remoteUrl, { type = "work" } = {}) {
 
 function filePathForPublicUrl(publicRoot, publicUrl) {
   return path.join(publicRoot, publicUrl.replace(/^\/+/, ""));
+}
+
+function publicUrlForFile(publicRoot, filePath) {
+  return `/${path.relative(publicRoot, filePath).split(path.sep).join("/")}`;
+}
+
+function normalizeCleanupDate(value) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) {
+    const error = new Error("now must be a valid date.");
+    error.statusCode = 400;
+    throw error;
+  }
+  return date;
+}
+
+function normalizePositiveInteger(value, fallback, name) {
+  if (value === null || value === undefined || value === "") return fallback;
+  const number = Math.trunc(Number(value));
+  if (!Number.isFinite(number) || number < 1) {
+    const error = new Error(`${name} must be a positive integer.`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return number;
+}
+
+function normalizeImageCacheCleanupOptions(options = {}) {
+  const retentionDays = normalizePositiveInteger(
+    options.retentionDays,
+    DEFAULT_IMAGE_CACHE_RETENTION_DAYS,
+    "retentionDays"
+  );
+  const maxBytes = normalizePositiveInteger(options.maxBytes, DEFAULT_IMAGE_CACHE_MAX_BYTES, "maxBytes");
+  const now = normalizeCleanupDate(options.now);
+  const cutoffAt = new Date(now.getTime() - retentionDays * DAY_MS).toISOString();
+  return {
+    dryRun: options.dryRun !== false,
+    retentionDays,
+    maxBytes,
+    cutoffAt,
+    cutoffTime: new Date(cutoffAt).getTime(),
+  };
+}
+
+function referencedCacheUrls(referencedUrls = {}) {
+  const normalized = referencedUrls && typeof referencedUrls === "object" ? referencedUrls : {};
+  const references = new Set();
+  const typedUrls = [
+    ["work", normalized.work],
+    ["activity", normalized.activity],
+    ["image", normalized.image],
+  ];
+
+  for (const [type, urls] of typedUrls) {
+    for (const url of Array.isArray(urls) ? urls : []) {
+      const publicUrl = publicCachePathForUrl(url, { type });
+      if (publicUrl) references.add(publicUrl);
+    }
+  }
+
+  return references;
+}
+
+async function listImageCacheFiles(publicRoot) {
+  const cacheRoot = path.join(publicRoot, "cache");
+  const files = [];
+
+  async function visit(directory) {
+    let entries;
+    try {
+      entries = await fsp.readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      if (error.code === "ENOENT") return;
+      throw error;
+    }
+
+    for (const entry of entries) {
+      const filePath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await visit(filePath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (!IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) continue;
+
+      const stat = await fsp.stat(filePath);
+      files.push({
+        filePath,
+        publicUrl: publicUrlForFile(publicRoot, filePath),
+        bytes: stat.size,
+        mtimeMs: stat.mtimeMs,
+        modifiedAt: stat.mtime.toISOString(),
+      });
+    }
+  }
+
+  await visit(cacheRoot);
+  return files;
+}
+
+function planImageCacheCleanup(files, references, options) {
+  const annotated = files.map((file) => ({
+    ...file,
+    protected: references.has(file.publicUrl),
+    olderThanCutoff: file.mtimeMs < options.cutoffTime,
+  }));
+  const totalBytes = annotated.reduce((sum, file) => sum + file.bytes, 0);
+  const planned = new Map();
+
+  for (const file of annotated) {
+    if (!file.protected && file.olderThanCutoff) planned.set(file.filePath, file);
+  }
+
+  let projectedBytes = totalBytes - [...planned.values()].reduce((sum, file) => sum + file.bytes, 0);
+  if (projectedBytes > options.maxBytes) {
+    const overflowCandidates = annotated
+      .filter((file) => !file.protected && !planned.has(file.filePath))
+      .sort((a, b) => a.mtimeMs - b.mtimeMs || a.publicUrl.localeCompare(b.publicUrl));
+    for (const file of overflowCandidates) {
+      planned.set(file.filePath, file);
+      projectedBytes -= file.bytes;
+      if (projectedBytes <= options.maxBytes) break;
+    }
+  }
+
+  return {
+    annotated,
+    deletable: [...planned.values()].sort((a, b) => a.mtimeMs - b.mtimeMs || a.publicUrl.localeCompare(b.publicUrl)),
+    totalBytes,
+  };
 }
 
 function isImageResponse(response) {
@@ -108,8 +242,54 @@ export function createImageCache({
     }
   }
 
+  async function runImageCacheCleanup(rawOptions = {}) {
+    const options = normalizeImageCacheCleanupOptions(rawOptions);
+    const references = referencedCacheUrls(rawOptions.referencedUrls);
+    const files = await listImageCacheFiles(publicRoot);
+    const plan = planImageCacheCleanup(files, references, options);
+    let deletedFiles = 0;
+    let deletedBytes = 0;
+
+    if (!options.dryRun) {
+      for (const file of plan.deletable) {
+        await fsp.rm(file.filePath, { force: true });
+        deletedFiles += 1;
+        deletedBytes += file.bytes;
+      }
+    }
+
+    const protectedFiles = plan.annotated.filter((file) => file.protected);
+    const unreferencedFiles = plan.annotated.filter((file) => !file.protected);
+    const oldUnreferencedFiles = unreferencedFiles.filter((file) => file.olderThanCutoff);
+    const deletableBytes = plan.deletable.reduce((sum, file) => sum + file.bytes, 0);
+
+    return {
+      dryRun: options.dryRun,
+      retentionDays: options.retentionDays,
+      cutoffAt: options.cutoffAt,
+      maxBytes: options.maxBytes,
+      totalFiles: plan.annotated.length,
+      totalBytes: plan.totalBytes,
+      protectedFiles: protectedFiles.length,
+      protectedBytes: protectedFiles.reduce((sum, file) => sum + file.bytes, 0),
+      unreferencedFiles: unreferencedFiles.length,
+      oldUnreferencedFiles: oldUnreferencedFiles.length,
+      deletableFiles: plan.deletable.length,
+      deletableBytes,
+      deletedFiles,
+      deletedBytes,
+      files: plan.deletable.map((file) => ({
+        publicUrl: file.publicUrl,
+        bytes: file.bytes,
+        modifiedAt: file.modifiedAt,
+        reason: file.olderThanCutoff ? "older_than_retention" : "cache_over_max_bytes",
+      })),
+    };
+  }
+
   return {
     cacheImageUrl,
+    runImageCacheCleanup,
     resolveCachedImageUrl,
     publicCachePathForUrl: (remoteUrl, options) => publicCachePathForUrl(remoteUrl, options),
   };

@@ -299,3 +299,120 @@ test("search history repository builds person profiles and filtered works", () =
     repo.close();
   }
 });
+
+test("search history cleanup keeps recent windows and deletes only stale excess search data", () => {
+  const repo = createSearchHistoryRepository({ dbPath: tempDbPath() });
+
+  function saveSession(id, { personId = 123, updatedAt, productOffset = 0 } = {}) {
+    const productId = `RJ${String(300000 + productOffset).padStart(6, "0")}`;
+    repo.saveSearchSnapshot(
+      samplePayload({
+        keyword: personId === null ? "loose search" : `Person ${personId}`,
+        person:
+          personId === null
+            ? {}
+            : {
+                id: personId,
+                name: `Person ${personId}`,
+                aliases: [{ value: `Person ${personId}` }],
+              },
+        searchedAliases: personId === null ? ["loose search"] : [`Person ${personId}`],
+        progress: {
+          ...samplePayload().progress,
+          jobId: id,
+          status: "completed",
+          isComplete: true,
+          updatedAt: Date.parse(updatedAt),
+        },
+        items: [
+          {
+            ...samplePayload().items[0],
+            productId,
+            title: `Work ${id}`,
+          },
+        ],
+      }),
+      {
+        id,
+        createdAt: updatedAt,
+        updatedAt,
+      }
+    );
+  }
+
+  try {
+    for (let index = 0; index < 23; index += 1) {
+      saveSession(`p123-${index}`, {
+        personId: 123,
+        updatedAt: `2026-01-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
+        productOffset: index,
+      });
+    }
+    for (let index = 0; index < 22; index += 1) {
+      saveSession(`anon-${index}`, {
+        personId: null,
+        updatedAt: `2026-01-${String(index + 1).padStart(2, "0")}T12:00:00.000Z`,
+        productOffset: 100 + index,
+      });
+    }
+    saveSession("subscribed-old", {
+      personId: 999,
+      updatedAt: "2026-01-01T06:00:00.000Z",
+      productOffset: 999,
+    });
+    repo.db
+      .prepare(
+        `
+          INSERT INTO person_subscriptions (
+            person_id, person_name, keyword, aliases_json, created_at, updated_at,
+            last_checked_at, last_successful_check_at, last_check_status, last_error,
+            last_result_count, last_new_item_count
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `
+      )
+      .run(
+        999,
+        "Subscribed Person",
+        "Subscribed Person",
+        JSON.stringify(["Subscribed Person"]),
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+        null,
+        null,
+        "idle",
+        "",
+        0,
+        0
+      );
+
+    const dryRun = repo.runSearchHistoryCleanup({
+      dryRun: true,
+      now: "2026-08-01T00:00:00.000Z",
+      retentionDays: 180,
+    });
+    assert.equal(dryRun.deletableSessions, 5);
+    assert.equal(dryRun.deletableResults, 5);
+    assert.equal(dryRun.deletedSessions, 0);
+    assert.equal(repo.getSearch("p123-0").id, "p123-0");
+
+    const executed = repo.runSearchHistoryCleanup({
+      dryRun: false,
+      now: "2026-08-01T00:00:00.000Z",
+      retentionDays: 180,
+    });
+    assert.equal(executed.deletedSessions, 5);
+    assert.equal(executed.deletedResults, 5);
+    assert.equal(repo.getSearch("p123-0"), null);
+    assert.equal(repo.getSearch("p123-3").id, "p123-3");
+    assert.equal(repo.getSearch("anon-0"), null);
+    assert.equal(repo.getSearch("anon-2").id, "anon-2");
+    assert.equal(repo.getSearch("subscribed-old").id, "subscribed-old");
+    assert.equal(
+      repo.db.prepare("SELECT COUNT(*) AS count FROM person_subscriptions WHERE person_id = 999").get().count,
+      1
+    );
+  } finally {
+    repo.close();
+  }
+});

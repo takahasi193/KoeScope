@@ -446,8 +446,8 @@ textarea:focus-visible {
 
 .result-card {
   display: grid;
-  grid-template-columns: minmax(132px, 18%) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(148px, 20%) minmax(0, 1fr);
+  gap: 20px;
   align-items: start;
   padding: 18px;
 }
@@ -455,14 +455,14 @@ textarea:focus-visible {
 .result-body {
   min-width: 0;
   display: grid;
-  gap: 11px;
+  gap: 13px;
   align-content: start;
 }
 
 .result-title-line {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 10px;
+  gap: 10px 12px;
   align-items: flex-start;
 }
 
@@ -478,7 +478,12 @@ textarea:focus-visible {
 .result-meta {
   margin: 0;
   color: var(--ks-muted);
-  line-height: 1.55;
+  line-height: 1.62;
+}
+
+.result-card .next-kv {
+  gap: 9px 10px;
+  line-height: 1.35;
 }
 
 .candidate:hover,
@@ -638,7 +643,7 @@ textarea:focus-visible {
 }
 
 .result-card .result-media {
-  max-width: 178px;
+  max-width: 196px;
 }
 
 .result-card .result-image {
@@ -821,6 +826,16 @@ textarea:focus-visible {
   margin-right: 7px;
 }
 
+.search-busy-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.85;
+  animation: ksBusyPulse 900ms ease-in-out infinite;
+}
+
 .workspace,
 .person-workspace,
 .metric-strip > div,
@@ -930,6 +945,18 @@ html[data-page-transition="slide-in-right"] .next-root {
   }
 }
 
+@keyframes ksBusyPulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.72);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+}
+
 @keyframes ksSlideOutLeft {
   from {
     opacity: 1;
@@ -989,13 +1016,13 @@ html[data-page-transition="slide-in-right"] .next-root {
   }
 
   .result-card {
-    grid-template-columns: 106px minmax(0, 1fr);
-    gap: 14px;
+    grid-template-columns: 118px minmax(0, 1fr);
+    gap: 16px;
     padding: 14px;
   }
 
   .result-card .result-media {
-    max-width: 106px;
+    max-width: 118px;
   }
 
   .ranking-card {
@@ -1028,12 +1055,12 @@ html[data-page-transition="slide-in-right"] .next-root {
   }
 
   .result-card {
-    grid-template-columns: 86px minmax(0, 1fr);
+    grid-template-columns: 94px minmax(0, 1fr);
     gap: 12px;
   }
 
   .result-card .result-media {
-    max-width: 86px;
+    max-width: 94px;
   }
 
   .ranking-card {

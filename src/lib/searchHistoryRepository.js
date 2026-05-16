@@ -6,6 +6,10 @@ const DEFAULT_HISTORY_LIMIT = 20;
 const MAX_HISTORY_LIMIT = 100;
 const DEFAULT_WORK_LIMIT = 100;
 const MAX_WORK_LIMIT = 300;
+const DEFAULT_SEARCH_CLEANUP_RETENTION_DAYS = 180;
+const DEFAULT_SEARCH_CLEANUP_KEEP_PER_PERSON = 20;
+const DEFAULT_SEARCH_CLEANUP_KEEP_ANONYMOUS = 20;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const TYPE_LABELS = {
   voice: "音声/ASMR",
@@ -44,6 +48,57 @@ function toIsoTime(value) {
     if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
   }
   return new Date().toISOString();
+}
+
+function normalizeCleanupDate(value) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) {
+    const error = new Error("now must be a valid date.");
+    error.statusCode = 400;
+    throw error;
+  }
+  return date;
+}
+
+function normalizeNonNegativeInteger(value, fallback, name) {
+  if (value === null || value === undefined || value === "") return fallback;
+  const number = Math.trunc(Number(value));
+  if (!Number.isFinite(number) || number < 0) {
+    const error = new Error(`${name} must be a non-negative integer.`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return number;
+}
+
+function normalizeSearchHistoryCleanupOptions(options = {}) {
+  const retentionDays = normalizeNonNegativeInteger(
+    options.retentionDays,
+    DEFAULT_SEARCH_CLEANUP_RETENTION_DAYS,
+    "retentionDays"
+  );
+  if (retentionDays < 1) {
+    const error = new Error("retentionDays must be at least 1.");
+    error.statusCode = 400;
+    throw error;
+  }
+  const now = normalizeCleanupDate(options.now);
+  const cutoffAt = new Date(now.getTime() - retentionDays * DAY_MS).toISOString();
+  return {
+    dryRun: options.dryRun !== false,
+    retentionDays,
+    cutoffAt,
+    keepPerPerson: normalizeNonNegativeInteger(
+      options.keepPerPerson,
+      DEFAULT_SEARCH_CLEANUP_KEEP_PER_PERSON,
+      "keepPerPerson"
+    ),
+    keepAnonymous: normalizeNonNegativeInteger(
+      options.keepAnonymous,
+      DEFAULT_SEARCH_CLEANUP_KEEP_ANONYMOUS,
+      "keepAnonymous"
+    ),
+  };
 }
 
 function normalizeAliases(value) {
@@ -661,6 +716,122 @@ export function createSearchHistoryRepository(options = {}) {
       .map((row) => row.product_id);
   }
 
+  const cleanupPlanCte = `
+    WITH
+    ranked_person_sessions AS (
+      SELECT id,
+             ROW_NUMBER() OVER (
+               PARTITION BY person_id
+               ORDER BY updated_at DESC, created_at DESC, id DESC
+             ) AS rn
+      FROM search_sessions
+      WHERE person_id IS NOT NULL
+    ),
+    ranked_anonymous_sessions AS (
+      SELECT id,
+             ROW_NUMBER() OVER (
+               ORDER BY updated_at DESC, created_at DESC, id DESC
+             ) AS rn
+      FROM search_sessions
+      WHERE person_id IS NULL
+    ),
+    subscribed_latest_sessions AS (
+      SELECT s.id,
+             ROW_NUMBER() OVER (
+               PARTITION BY s.person_id
+               ORDER BY s.updated_at DESC, s.created_at DESC, s.id DESC
+             ) AS rn
+      FROM search_sessions s
+      JOIN person_subscriptions ps ON ps.person_id = s.person_id
+      WHERE s.person_id IS NOT NULL
+    ),
+    protected_sessions AS (
+      SELECT id FROM ranked_person_sessions WHERE rn <= @keepPerPerson
+      UNION
+      SELECT id FROM ranked_anonymous_sessions WHERE rn <= @keepAnonymous
+      UNION
+      SELECT id FROM subscribed_latest_sessions WHERE rn = 1
+    ),
+    deletable_sessions AS (
+      SELECT s.id
+      FROM search_sessions s
+      LEFT JOIN protected_sessions p ON p.id = s.id
+      WHERE s.updated_at < @cutoffAt
+        AND p.id IS NULL
+    )
+  `;
+
+  function countSearchHistoryCleanupPlan(options) {
+    return db
+      .prepare(
+        `
+          ${cleanupPlanCte}
+          SELECT
+            (SELECT COUNT(*) FROM search_sessions WHERE updated_at < @cutoffAt) AS oldSessions,
+            (SELECT COUNT(*) FROM protected_sessions) AS protectedSessions,
+            (SELECT COUNT(*) FROM deletable_sessions) AS deletableSessions,
+            (
+              SELECT COUNT(*)
+              FROM search_session_results
+              WHERE search_session_id IN (SELECT id FROM deletable_sessions)
+            ) AS deletableResults
+        `
+      )
+      .get(options);
+  }
+
+  function executeSearchHistoryCleanup(options) {
+    const transaction = db.transaction(() => {
+      const resultDelete = db
+        .prepare(
+          `
+            ${cleanupPlanCte}
+            DELETE FROM search_session_results
+            WHERE search_session_id IN (SELECT id FROM deletable_sessions)
+          `
+        )
+        .run(options);
+      const sessionDelete = db
+        .prepare(
+          `
+            ${cleanupPlanCte}
+            DELETE FROM search_sessions
+            WHERE id IN (SELECT id FROM deletable_sessions)
+          `
+        )
+        .run(options);
+      return {
+        deletedResults: resultDelete.changes,
+        deletedSessions: sessionDelete.changes,
+      };
+    });
+
+    return transaction();
+  }
+
+  function runSearchHistoryCleanup(rawOptions = {}) {
+    const options = normalizeSearchHistoryCleanupOptions(rawOptions);
+    const plan = countSearchHistoryCleanupPlan(options);
+    const executed = options.dryRun
+      ? { deletedResults: 0, deletedSessions: 0 }
+      : executeSearchHistoryCleanup(options);
+
+    return {
+      dryRun: options.dryRun,
+      retentionDays: options.retentionDays,
+      cutoffAt: options.cutoffAt,
+      keepPerPerson: options.keepPerPerson,
+      keepAnonymous: options.keepAnonymous,
+      oldSessions: plan.oldSessions ?? 0,
+      protectedSessions: plan.protectedSessions ?? 0,
+      deletableSessions: plan.deletableSessions ?? 0,
+      deletableResults: plan.deletableResults ?? 0,
+      deletedSessions: executed.deletedSessions,
+      deletedResults: executed.deletedResults,
+      touchedTables: ["search_sessions", "search_session_results"],
+    };
+  }
+
   function close() {
     if (!options.db) db.close();
   }
@@ -674,6 +845,7 @@ export function createSearchHistoryRepository(options = {}) {
     getPersonProfile,
     getPersonWorks,
     getKnownPersonProductIds,
+    runSearchHistoryCleanup,
     close,
   };
 }

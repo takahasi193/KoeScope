@@ -23,8 +23,6 @@ function TemplateSwitcher({ initial }: { initial: TemplateKey }) {
 
   useEffect(() => {
     setActive(readTemplate(window.location.pathname));
-    router.prefetch("/");
-    router.prefetch("/dashboard");
     const shouldEnter = window.sessionStorage.getItem(TEMPLATE_TRANSITION_KEY);
     if (!shouldEnter) return;
     window.sessionStorage.removeItem(TEMPLATE_TRANSITION_KEY);

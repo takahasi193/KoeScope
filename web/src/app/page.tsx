@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Input, Spinner } from "@heroui/react";
+import { Button, Input } from "@heroui/react";
 import { SearchTopNav } from "@/components/TopNav";
-import { buildQuery, getJson, sendJson, wait } from "@/lib/api";
+import { getJson, sendJson, wait } from "@/lib/api";
 import { arrayOf, compactText, formatNumber, formatPrice, imageOf, workTitle } from "@/lib/format";
 import {
   AGE_FILTERS,
@@ -89,7 +89,7 @@ export default function SearchPage() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [ageFilter, setAgeFilter] = useState("all");
   const [payload, setPayload] = useState<Record<string, any> | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<"resolve" | "search" | null>(null);
   const [toast, setToast] = useState("");
   const pollingToken = useRef(0);
 
@@ -106,6 +106,7 @@ export default function SearchPage() {
   );
   const typeCounts = useMemo(() => countBy(allItems, (item) => compactText(item.type || item.category, "other")), [allItems]);
   const ageCounts = useMemo(() => countBy(typeSourceItems, (item) => compactText(item.ageCategory || item.age, "unknown")), [typeSourceItems]);
+  const busy = busyAction !== null;
 
   function showToast(message: string) {
     setToast(message);
@@ -153,7 +154,7 @@ export default function SearchPage() {
   async function resolvePersons() {
     const value = keyword.trim();
     if (!value) return showToast("请输入人物名或别名。");
-    setBusy(true);
+    setBusyAction("resolve");
     try {
       const data = await sendJson<Record<string, any>>("/api/persons", { keyword: value, limit: 10, personCategory });
       const nextPersons = arrayOf<Person>(data.persons);
@@ -169,7 +170,7 @@ export default function SearchPage() {
     } catch (error: any) {
       showToast(error.message || "解析失败。");
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
@@ -185,22 +186,28 @@ export default function SearchPage() {
       const nextPayload = await getJson<Record<string, any>>(`/api/search/progressive/${encodeURIComponent(jobId)}`);
       setPayload(nextPayload);
       if (nextPayload.progress?.isComplete) {
-        setBusy(false);
+        setBusyAction(null);
         showToast(nextPayload.progress?.status === "failed" ? "搜索失败，请查看摘要。" : "搜索完成。");
         return;
       }
     }
   }
 
-  async function runSearch() {
+  async function runSearch({
+    orderOverride = order,
+    resetFilters = true
+  }: { orderOverride?: string; resetFilters?: boolean } = {}) {
+    const searchOrder = orderOverride;
     const aliasesToSearch = selectedAliases(keyword, selected);
     if (!aliasesToSearch.length) return showToast("请至少选择一个别名。");
     if ((scope === "all" || scope === "adult") && !adultConfirmed) {
       return showToast("包含 R18 范围时需要确认合法年龄与地区。");
     }
-    setBusy(true);
-    setTypeFilter("all");
-    setAgeFilter("all");
+    setBusyAction("search");
+    if (resetFilters) {
+      setTypeFilter("all");
+      setAgeFilter("all");
+    }
     try {
       const nextPayload = await sendJson<Record<string, any>>("/api/search/progressive", {
         keyword: keyword.trim(),
@@ -211,7 +218,7 @@ export default function SearchPage() {
         maxPagesPerAlias: maxPages,
         perPage,
         scope,
-        order,
+        order: searchOrder,
         verifyDetails
       });
       setPayload(nextPayload);
@@ -220,16 +227,23 @@ export default function SearchPage() {
         const token = pollingToken.current + 1;
         pollingToken.current = token;
         void pollSearch(jobId, token).catch((error) => {
-          setBusy(false);
+          setBusyAction(null);
           showToast(error.message || "轮询失败。");
         });
       } else {
-        setBusy(false);
+        setBusyAction(null);
       }
     } catch (error: any) {
-      setBusy(false);
+      setBusyAction(null);
       showToast(error.message || "搜索失败。");
     }
+  }
+
+  function changeOrder(nextOrder: string) {
+    if (nextOrder === order || busy) return;
+    setOrder(nextOrder);
+    if (!payload) return;
+    void runSearch({ orderOverride: nextOrder, resetFilters: false });
   }
 
   async function importWatch(item: WorkItem) {
@@ -254,6 +268,7 @@ export default function SearchPage() {
 
   return (
     <>
+      <link rel="stylesheet" href="/enterprise.css" />
       <SearchTopNav status={serverStatus} />
       <main className="shell">
         <section className="workspace" data-section="01 Search">
@@ -272,12 +287,13 @@ export default function SearchPage() {
                 }}
               />
             </label>
-            <Button className="primary-action ks-hero-button ks-hero-button-primary" type="button" isDisabled={busy} aria-busy={busy} onPress={() => void resolvePersons()}>
-              {busy ? <Spinner className="ks-action-spinner" size="sm" color="current" /> : null}
-              解析人物
+            <Button className="primary-action ks-hero-button ks-hero-button-primary" type="button" isDisabled={busy} aria-busy={busyAction === "resolve"} onPress={() => void resolvePersons()}>
+              {busyAction === "resolve" ? <span className="search-busy-dot" aria-hidden="true" /> : null}
+              {busyAction === "resolve" ? "解析中" : "解析人物"}
             </Button>
-            <Button className="secondary-action ks-hero-button" type="button" isDisabled={busy || !keyword.trim()} aria-busy={busy} onPress={() => void runSearch()}>
-              搜索 DLsite
+            <Button className="secondary-action ks-hero-button" type="button" isDisabled={busy || !keyword.trim()} aria-busy={busyAction === "search"} onPress={() => void runSearch()}>
+              {busyAction === "search" ? <span className="search-busy-dot" aria-hidden="true" /> : null}
+              {busyAction === "search" ? "搜索中" : "搜索 DLsite"}
             </Button>
           </div>
 
@@ -406,7 +422,8 @@ export default function SearchPage() {
                     data-order={option.key}
                     key={option.key}
                     type="button"
-                    onClick={() => setOrder(option.key)}
+                    disabled={busy}
+                    onClick={() => changeOrder(option.key)}
                   >
                     {option.label}
                   </button>

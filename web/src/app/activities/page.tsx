@@ -166,6 +166,7 @@ export default function ActivitiesPage() {
 
   return (
     <>
+      <link rel="stylesheet" href="/dashboard.css" />
       <MonitorTopNav title="活动中心" eyebrow="Activity 04 / DLsite 活动">
         <a className="link-action" href="/dashboard.html">返回 Monitor</a>
         <a className="link-action" href="/">返回搜索</a>

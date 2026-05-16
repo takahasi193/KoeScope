@@ -788,6 +788,20 @@ export function createDlsiteMonitor({
     return repository.runSnapshotCleanup({ ...options, dryRun });
   }
 
+  async function runImageCacheCleanup(options = {}) {
+    const dryRun = options.dryRun !== false;
+    if (!dryRun && snapshotCleanupIsBlocked()) {
+      const error = new Error("Image cache cleanup is blocked while a sync is running.");
+      error.statusCode = 409;
+      throw error;
+    }
+    return imageCache.runImageCacheCleanup({
+      ...options,
+      dryRun,
+      referencedUrls: repository.getImageCacheReferences?.() ?? {},
+    });
+  }
+
   return {
     repository,
     startSync,
@@ -838,6 +852,7 @@ export function createDlsiteMonitor({
       attachCachedWorkCollectionPayload(repository.getAffordableRecommendations(query)),
     getBundleRecommendations: (query) => attachCachedBundlePayload(repository.getBundleRecommendations(query)),
     runSnapshotCleanup,
+    runImageCacheCleanup,
     close: () => {
       stopDailyScheduler();
       repository.close();

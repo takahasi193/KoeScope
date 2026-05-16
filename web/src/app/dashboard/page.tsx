@@ -9,6 +9,17 @@ import { arrayOf, compactText, formatDateTime, formatNumber, formatPercent, form
 
 type Json = Record<string, any>;
 
+const PRIMARY_DASHBOARD_SECTIONS = [
+  "summary",
+  "statuses",
+  "activities",
+  "activityAlerts",
+  "rankings",
+  "alerts",
+  "account",
+].join(",");
+const DEFERRED_DASHBOARD_SECTIONS = ["watchlist", "recommendations", "bundles"].join(",");
+
 function MiniWork({ item, onHistory, onWatch, onDelete }: { item: Json; onHistory?: (id: string) => void; onWatch?: (item: Json) => void; onDelete?: (id: string) => void }) {
   return (
     <article className="mini-work">
@@ -126,7 +137,7 @@ export default function DashboardPage() {
   const [account, setAccount] = useState<Json>({});
   const [recommendations, setRecommendations] = useState<Json>({ items: [] });
   const [bundles, setBundles] = useState<Json>({ items: [] });
-  const [maintenance, setMaintenance] = useState<Json>({});
+  const [maintenance, setMaintenance] = useState<Json | null>(null);
   const [category, setCategory] = useState("all");
   const [floor, setFloor] = useState("home");
   const [period, setPeriod] = useState("week");
@@ -134,6 +145,7 @@ export default function DashboardPage() {
   const [history, setHistory] = useState<Json | null>(null);
   const [annotation, setAnnotation] = useState({ status: "", tags: "", note: "" });
   const [toast, setToast] = useState("");
+  const [chartsReady, setChartsReady] = useState(false);
   const priceChartRef = useRef<any>(null);
   const rankChartRef = useRef<any>(null);
 
@@ -146,13 +158,13 @@ export default function DashboardPage() {
     try {
       const nextState = await getJson<Json>(
         `/api/dashboard/state${buildQuery({
+          sections: PRIMARY_DASHBOARD_SECTIONS,
           floor,
           period,
           category,
           alertsStatus,
           activityLimit: 3,
-          alertLimit: 50,
-          retentionDays: 365
+          alertLimit: 50
         })}`
       );
       setSummary(nextState.summary ?? {});
@@ -162,18 +174,34 @@ export default function DashboardPage() {
       setActivityAlerts(nextState.activityAlerts ?? {});
       setRankings(nextState.rankings ?? { items: [] });
       setAlerts(nextState.alerts ?? { items: [] });
-      setWatchlist(nextState.watchlist ?? { items: [] });
       setAccount(nextState.account ?? {});
-      setRecommendations(nextState.recommendations ?? { items: [] });
-      setBundles(nextState.bundles ?? { items: [] });
-      setMaintenance(nextState.maintenance ?? {});
     } catch (error: any) {
       showToast(error.message || "Dashboard 读取失败。");
     }
   }
 
+  async function loadDeferredDashboardSections() {
+    try {
+      const nextState = await getJson<Json>(
+        `/api/dashboard/state${buildQuery({
+          sections: DEFERRED_DASHBOARD_SECTIONS
+        })}`
+      );
+      setWatchlist(nextState.watchlist ?? { items: [] });
+      setRecommendations(nextState.recommendations ?? { items: [] });
+      setBundles(nextState.bundles ?? { items: [] });
+    } catch (error: any) {
+      showToast(error.message || "Dashboard 延迟模块读取失败。");
+    }
+  }
+
+  async function refreshDashboard() {
+    await loadDashboard();
+    await loadDeferredDashboardSections();
+  }
+
   useEffect(() => {
-    void loadDashboard();
+    void refreshDashboard();
   }, [category, floor, period, alertsStatus]);
 
   useEffect(() => {
@@ -210,13 +238,13 @@ export default function DashboardPage() {
         options: { responsive: true, maintainAspectRatio: false, scales: { y: { reverse: true } } }
       });
     }
-  }, [history]);
+  }, [history, chartsReady]);
 
   async function startSync() {
     try {
       const payload = await sendJson<Json>("/api/sync/dlsite-rankings", { manual: true });
       showToast(payload.alreadyRunning ? "排行榜同步已在运行。" : "已启动排行榜同步。");
-      await loadDashboard();
+      await refreshDashboard();
     } catch (error: any) {
       showToast(error.message || "同步失败。");
     }
@@ -226,7 +254,7 @@ export default function DashboardPage() {
     try {
       const payload = await sendJson<Json>("/api/sync/dlsite-activities", { manual: true });
       showToast(payload.alreadyRunning ? "活动同步已在运行。" : "已启动活动同步。");
-      await loadDashboard();
+      await refreshDashboard();
     } catch (error: any) {
       showToast(error.message || "活动同步失败。");
     }
@@ -236,9 +264,19 @@ export default function DashboardPage() {
     try {
       await sendJson("/api/account/dlsite/session", {}, "DELETE");
       showToast("已断开本地账号会话。");
-      await loadDashboard();
+      await refreshDashboard();
     } catch (error: any) {
       showToast(error.message || "断开失败。");
+    }
+  }
+
+  async function previewCleanup() {
+    try {
+      const payload = await getJson<Json>("/api/maintenance/snapshot-cleanup?retentionDays=365");
+      setMaintenance(payload);
+      showToast(`可清理 ${formatNumber(payload.totalDeletable)} 条快照。`);
+    } catch (error: any) {
+      showToast(error.message || "预览失败。");
     }
   }
 
@@ -248,7 +286,7 @@ export default function DashboardPage() {
       const payload = await sendJson<Json>("/api/maintenance/snapshot-cleanup", { dryRun: false, retentionDays: 365 });
       setMaintenance(payload);
       showToast(`已清理 ${formatNumber(payload.totalDeleted)} 条快照。`);
-      await loadDashboard();
+      await refreshDashboard();
     } catch (error: any) {
       showToast(error.message || "清理失败。");
     }
@@ -258,7 +296,7 @@ export default function DashboardPage() {
     try {
       await sendJson("/api/watchlist/import", { work: item });
       showToast("已加入关注。");
-      await loadDashboard();
+      await refreshDashboard();
     } catch (error: any) {
       showToast(error.message || "加入关注失败。");
     }
@@ -268,7 +306,7 @@ export default function DashboardPage() {
     try {
       await sendJson(`/api/watchlist/${encodeURIComponent(productId)}`, {}, "DELETE");
       showToast("已移除关注。");
-      await loadDashboard();
+      await refreshDashboard();
     } catch (error: any) {
       showToast(error.message || "移除失败。");
     }
@@ -278,7 +316,7 @@ export default function DashboardPage() {
     try {
       await sendJson(`/${activity ? "api/activity-alerts" : "api/alerts"}/${encodeURIComponent(id)}/read`, {});
       showToast("提醒已标记为已读。");
-      await loadDashboard();
+      await refreshDashboard();
     } catch (error: any) {
       showToast(error.message || "标记失败。");
     }
@@ -305,7 +343,7 @@ export default function DashboardPage() {
       }, "PUT");
       setHistory({ ...history, annotation: payload });
       showToast("标注已保存。");
-      await loadDashboard();
+      await refreshDashboard();
     } catch (error: any) {
       showToast(error.message || "保存失败。");
     }
@@ -318,7 +356,7 @@ export default function DashboardPage() {
       await sendJson(`/api/works/${encodeURIComponent(productId)}/annotation`, {}, "DELETE");
       setHistory({ ...history, annotation: {} });
       showToast("标注已清空。");
-      await loadDashboard();
+      await refreshDashboard();
     } catch (error: any) {
       showToast(error.message || "清空失败。");
     }
@@ -332,6 +370,7 @@ export default function DashboardPage() {
   const bundleItems = arrayOf<Json>(bundles.items);
   const syncLabel = syncStatus.running ? "同步中" : "已就绪";
   const maintenanceText = useMemo(() => {
+    if (!maintenance) return "点击预览检查可清理快照。";
     const deletable = Number(maintenance.totalDeletable ?? 0);
     const deleted = Number(maintenance.totalDeleted ?? 0);
     return maintenance.dryRun === false
@@ -341,9 +380,16 @@ export default function DashboardPage() {
 
   return (
     <>
-      <Script src="/vendor/chart.js/chart.umd.js" strategy="afterInteractive" />
+      <link rel="stylesheet" href="/dashboard.css" />
+      {history ? (
+        <Script
+          src="/vendor/chart.js/chart.umd.js"
+          strategy="lazyOnload"
+          onLoad={() => setChartsReady(true)}
+          onReady={() => setChartsReady(true)}
+        />
+      ) : null}
       <MonitorTopNav title="KoeScope Monitor" eyebrow="Monitor 03 / Local SQLite">
-        <a className="link-action" href="/">返回 KoeScope 搜索</a>
         <button className="primary-action" type="button" onClick={startSync}>同步</button>
         <span className="status-pill">{syncLabel}</span>
       </MonitorTopNav>
@@ -446,7 +492,7 @@ export default function DashboardPage() {
             </section>
 
             <section className="side-section">
-              <div className="section-head compact"><h2>数据维护</h2><button className="text-action" type="button" onClick={loadDashboard}>预览</button></div>
+              <div className="section-head compact"><h2>数据维护</h2><button className="text-action" type="button" onClick={previewCleanup}>预览</button></div>
               <div className="maintenance-box">
                 <div className="maintenance-summary">{maintenanceText}</div>
                 <div className="mini-actions"><button className="mini-button primary" type="button" onClick={runCleanup}>执行清理</button></div>

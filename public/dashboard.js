@@ -22,6 +22,16 @@ const state = {
 
 const RUNNING_REFRESH_MS = 3000;
 const IDLE_REFRESH_MS = 10000;
+const PRIMARY_DASHBOARD_SECTIONS = [
+  "summary",
+  "statuses",
+  "activities",
+  "activityAlerts",
+  "rankings",
+  "alerts",
+  "account",
+].join(",");
+const DEFERRED_DASHBOARD_SECTIONS = ["watchlist", "recommendations", "bundles"].join(",");
 const CATEGORY_LABELS = {
   all: "总榜",
   voice: "ASMR/音声",
@@ -104,6 +114,26 @@ const historyCharts = {
   price: null,
   rank: null,
 };
+let deferredRefreshInFlight = false;
+let chartLoadPromise = null;
+
+function loadChartLibrary() {
+  if (typeof window.Chart === "function") return Promise.resolve(true);
+  if (chartLoadPromise) return chartLoadPromise;
+
+  chartLoadPromise = new Promise((resolve) => {
+    const script = document.createElement("script");
+    script.src = "/vendor/chart.js/chart.umd.js";
+    script.async = true;
+    script.onload = () => resolve(typeof window.Chart === "function");
+    script.onerror = () => resolve(false);
+    const target = document.head || document.body || document.documentElement;
+    if (target?.append) target.append(script);
+    else resolve(false);
+  });
+
+  return chartLoadPromise;
+}
 
 function toast(message) {
   els.toast.textContent = message;
@@ -681,7 +711,7 @@ function renderMaintenance() {
   els.maintenanceCleanupButton.disabled = syncRunning || !maintenance || maintenance.totalDeletable <= 0;
 
   if (!maintenance) {
-    els.maintenanceSummary.textContent = "正在检查可清理快照。";
+    els.maintenanceSummary.textContent = "点击预览检查可清理快照。";
     return;
   }
 
@@ -918,15 +948,41 @@ function notifyDashboardUnread() {
 
 function dashboardStateUrl() {
   const params = new URLSearchParams({
+    sections: PRIMARY_DASHBOARD_SECTIONS,
     floor: state.floor,
     period: state.period,
     category: state.category,
     alertsStatus: state.alertsStatus,
     activityLimit: "3",
     alertLimit: "50",
-    retentionDays: "365",
   });
   return `/api/dashboard/state?${params.toString()}`;
+}
+
+function deferredDashboardStateUrl() {
+  const params = new URLSearchParams({
+    sections: DEFERRED_DASHBOARD_SECTIONS,
+  });
+  return `/api/dashboard/state?${params.toString()}`;
+}
+
+async function loadDeferredDashboardSections() {
+  if (deferredRefreshInFlight) return;
+  deferredRefreshInFlight = true;
+
+  try {
+    const dashboardState = await getJson(deferredDashboardStateUrl());
+    state.watchlist = dashboardState.watchlist?.items ?? [];
+    state.recommendations = dashboardState.recommendations ?? {};
+    state.bundleRecommendations = dashboardState.bundles ?? {};
+    renderWatchlist();
+    renderRecommendations();
+    renderBundleRecommendations();
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    deferredRefreshInFlight = false;
+  }
 }
 
 async function refreshAll() {
@@ -945,13 +1001,10 @@ async function refreshAll() {
     state.activityAlertSummary = dashboardState.activityAlerts ?? {};
     state.ranking = dashboardState.rankings ?? {};
     state.alerts = dashboardState.alerts?.items ?? [];
-    state.watchlist = dashboardState.watchlist?.items ?? [];
     state.account = dashboardState.account ?? {};
-    state.recommendations = dashboardState.recommendations ?? {};
-    state.bundleRecommendations = dashboardState.bundles ?? {};
-    state.maintenance = dashboardState.maintenance ?? {};
     renderAll();
     notifyDashboardUnread();
+    loadDeferredDashboardSections();
   } catch (error) {
     toast(error.message);
     renderAll();
@@ -1135,7 +1188,9 @@ async function markActivityAlertRead(id) {
 
 async function showHistory(productId, { focusAnnotation = false } = {}) {
   try {
-    renderHistory(await getJson(`/api/works/${encodeURIComponent(productId)}/history`));
+    const payload = await getJson(`/api/works/${encodeURIComponent(productId)}/history`);
+    await loadChartLibrary();
+    renderHistory(payload);
     if (focusAnnotation) els.annotationNote.focus?.();
   } catch (error) {
     toast(error.message);

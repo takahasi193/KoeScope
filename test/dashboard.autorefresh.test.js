@@ -354,7 +354,11 @@ test("dashboard preloads periodically while idle", async () => {
   const { timers, requests } = createDashboardHarness({ running: false });
   await flushAsyncWork();
 
-  assert.equal(requests.some((request) => request.path.startsWith("/api/dashboard/state")), true);
+  const dashboardRequest = requests.find((request) => request.path.startsWith("/api/dashboard/state"));
+  assert.ok(dashboardRequest);
+  assert.match(dashboardRequest.path, /sections=summary%2Cstatuses%2Cactivities%2CactivityAlerts%2Crankings%2Calerts%2Caccount/);
+  assert.doesNotMatch(dashboardRequest.path, /maintenance/);
+  assert.equal(requests.some((request) => request.path.startsWith("/api/maintenance/snapshot-cleanup")), false);
   assert.equal(timers.at(-1).delay, 10000);
 });
 
@@ -474,12 +478,21 @@ test("dashboard renders bundle advice and dedupes open-page browser notification
   assert.equal(notifications.length, 2);
 });
 
-test("dashboard renders maintenance cleanup preview and executes cleanup", async () => {
+test("dashboard renders maintenance cleanup only after explicit preview and executes cleanup", async () => {
   const { context, elements, requests } = createDashboardHarness({ running: false });
   await flushAsyncWork();
 
-  assert.match(elements.get("#maintenanceSummary").innerHTML, /3/);
+  assert.doesNotMatch(elements.get("#maintenanceSummary").innerHTML, /3/);
   assert.equal(requests.some((request) => request.path.startsWith("/api/dashboard/state")), true);
+  assert.equal(requests.some((request) => request.path.startsWith("/api/maintenance/snapshot-cleanup")), false);
+
+  requests.length = 0;
+  await vm.runInContext("previewSnapshotCleanup()", context);
+  await flushAsyncWork();
+
+  const previewRequest = requests.find((request) => request.path.startsWith("/api/maintenance/snapshot-cleanup"));
+  assert.ok(previewRequest);
+  assert.match(elements.get("#maintenanceSummary").innerHTML, /3/);
 
   requests.length = 0;
   await vm.runInContext("runSnapshotCleanup()", context);
@@ -488,4 +501,57 @@ test("dashboard renders maintenance cleanup preview and executes cleanup", async
   const cleanupRequest = requests.find((request) => request.path === "/api/maintenance/snapshot-cleanup");
   assert.deepEqual(JSON.parse(cleanupRequest.options.body), { dryRun: false, retentionDays: 365 });
   assert.match(elements.get("#toast").textContent, /3/);
+});
+
+test("legacy dashboard does not load Chart.js in the initial HTML", () => {
+  assert.doesNotMatch(fs.readFileSync("public/dashboard.html", "utf8"), /chart\.umd\.js/);
+});
+
+test("Next dashboard keeps heavy dashboard sections out of the initial load", () => {
+  const source = fs.readFileSync("web/src/app/dashboard/page.tsx", "utf8");
+  assert.match(source, /sections:\s*PRIMARY_DASHBOARD_SECTIONS/);
+  assert.doesNotMatch(source, /strategy="afterInteractive"/);
+  assert.match(source, /api\/maintenance\/snapshot-cleanup\?retentionDays=365/);
+});
+
+test("Next app keeps route-specific CSS and dashboard prefetch out of the search shell", () => {
+  const layout = fs.readFileSync("web/src/app/layout.tsx", "utf8");
+  const searchPage = fs.readFileSync("web/src/app/page.tsx", "utf8");
+  const dashboardPage = fs.readFileSync("web/src/app/dashboard/page.tsx", "utf8");
+  const activitiesPage = fs.readFileSync("web/src/app/activities/page.tsx", "utf8");
+  const personPage = fs.readFileSync("web/src/app/person/page.tsx", "utf8");
+  const topNav = fs.readFileSync("web/src/components/TopNav.tsx", "utf8");
+
+  assert.match(layout, /href="\/styles\.css"/);
+  assert.doesNotMatch(layout, /href="\/dashboard\.css"/);
+  assert.doesNotMatch(layout, /href="\/person\.css"/);
+  assert.doesNotMatch(layout, /href="\/enterprise\.css"/);
+  assert.match(searchPage, /href="\/enterprise\.css"/);
+  assert.match(dashboardPage, /href="\/dashboard\.css"/);
+  assert.match(activitiesPage, /href="\/dashboard\.css"/);
+  assert.match(personPage, /href="\/enterprise\.css"/);
+  assert.match(personPage, /href="\/person\.css"/);
+  assert.doesNotMatch(topNav, /prefetch\("\/dashboard"\)/);
+});
+
+test("Next search page reruns searches for sort changes without the large shared spinner", () => {
+  const source = fs.readFileSync("web/src/app/page.tsx", "utf8");
+
+  assert.doesNotMatch(source, /Spinner/);
+  assert.match(source, /busyAction/);
+  assert.match(source, /function changeOrder/);
+  assert.match(source, /order:\s*searchOrder/);
+  assert.match(source, /onClick=\{\(\) => changeOrder\(option\.key\)\}/);
+  assert.doesNotMatch(source, /onClick=\{\(\) => setOrder\(option\.key\)\}/);
+});
+
+test("Next dashboard top navigation avoids the redundant search return and styles the module switcher", () => {
+  const dashboardPage = fs.readFileSync("web/src/app/dashboard/page.tsx", "utf8");
+  const dashboardCss = fs.readFileSync("public/dashboard.css", "utf8");
+
+  assert.doesNotMatch(dashboardPage, /<a className="link-action" href="\/">返回 KoeScope 搜索<\/a>/);
+  assert.match(dashboardPage, /<MonitorTopNav title="KoeScope Monitor"/);
+  assert.match(dashboardCss, /\.monitor-topbar \.top-actions/);
+  assert.match(dashboardCss, /\.monitor-topbar \.template-switcher/);
+  assert.match(dashboardCss, /\.monitor-topbar \.template-switcher button/);
 });

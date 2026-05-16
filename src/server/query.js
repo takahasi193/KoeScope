@@ -88,6 +88,62 @@ export function readMaintenanceDryRun(value) {
   return value !== false && value !== "false" && value !== "0";
 }
 
+export function readImageCacheRetentionDays(value) {
+  if (value === null || value === undefined || value === "") return 30;
+  return Math.trunc(Number(value));
+}
+
+export function readImageCacheMaxBytes(value) {
+  if (value === null || value === undefined || value === "") return 512 * 1024 * 1024;
+  return Math.trunc(Number(value));
+}
+
+export function readSearchHistoryCleanupRetentionDays(value) {
+  if (value === null || value === undefined || value === "") return 180;
+  return Math.trunc(Number(value));
+}
+
+export function readSearchHistoryCleanupKeepLimit(value) {
+  if (value === null || value === undefined || value === "") return 20;
+  return Math.trunc(Number(value));
+}
+
+const DASHBOARD_STATE_SECTIONS = new Set([
+  "summary",
+  "statuses",
+  "activities",
+  "activityAlerts",
+  "rankings",
+  "alerts",
+  "watchlist",
+  "account",
+  "recommendations",
+  "bundles",
+  "maintenance",
+]);
+
+function splitQueryList(value) {
+  const values = Array.isArray(value) ? value : [value];
+  return values
+    .flatMap((item) => String(item ?? "").split(","))
+    .map(normalizeSpace)
+    .filter(Boolean);
+}
+
+export function readDashboardStateSections(value) {
+  const sections = splitQueryList(value);
+  if (sections.length === 0) return null;
+
+  const unknown = sections.filter((section) => !DASHBOARD_STATE_SECTIONS.has(section));
+  if (unknown.length) {
+    const error = new Error(`Unknown dashboard state section: ${unknown.join(", ")}`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return new Set(sections);
+}
+
 export function readActivityAlertSummaryLimit(value) {
   return Math.min(Math.max(Number(value) || 3, 1), 10);
 }
@@ -139,5 +195,6 @@ export function readDashboardStateQuery(query = {}) {
     activityLimit: readDashboardActivityLimit(query.activityLimit),
     alertLimit: readAlertLimit(query.alertLimit ?? query.limit),
     retentionDays: readMaintenanceRetentionDays(query.retentionDays),
+    sections: readDashboardStateSections(query.sections),
   };
 }

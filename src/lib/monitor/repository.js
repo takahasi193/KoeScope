@@ -62,6 +62,20 @@ export function createMonitorRepository(options = {}) {
     };
   }
 
+  function getImageCacheReferences() {
+    const workRows = db
+      .prepare("SELECT image_url AS imageUrl FROM works WHERE image_url IS NOT NULL AND image_url <> ''")
+      .all();
+    const activityRows = db
+      .prepare("SELECT image_url AS imageUrl FROM activities WHERE image_url IS NOT NULL AND image_url <> ''")
+      .all();
+
+    return {
+      work: workRows.map((row) => row.imageUrl).filter(Boolean),
+      activity: activityRows.map((row) => row.imageUrl).filter(Boolean),
+    };
+  }
+
   function close() {
     db.close();
   }
@@ -80,6 +94,7 @@ export function createMonitorRepository(options = {}) {
     saveImportedWork: works.saveImportedWork,
     saveActivities: activities.saveActivities,
     getDashboardSummary,
+    getImageCacheReferences,
     getActivities: activities.getActivities,
     getActivityAlertSummary: activities.getActivityAlertSummary,
     getActivityPersonalSummary: activities.getActivityPersonalSummary,

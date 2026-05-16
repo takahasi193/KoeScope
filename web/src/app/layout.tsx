@@ -17,9 +17,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="stylesheet" href="/theme.css" />
         <link rel="stylesheet" href="/styles.css" />
-        <link rel="stylesheet" href="/person.css" />
-        <link rel="stylesheet" href="/dashboard.css" />
-        <link rel="stylesheet" href="/enterprise.css" />
       </head>
       <body>
         <ThemeProvider>

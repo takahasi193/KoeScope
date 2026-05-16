@@ -217,6 +217,8 @@ export default function PersonPage() {
 
   return (
     <>
+      <link rel="stylesheet" href="/enterprise.css" />
+      <link rel="stylesheet" href="/person.css" />
       <SearchTopNav status={serverStatus} />
       <main className="shell person-shell">
         <section className="person-workspace">
