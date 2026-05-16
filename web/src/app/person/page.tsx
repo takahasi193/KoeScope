@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { SearchTopNav } from "@/components/TopNav";
 import { buildQuery, getJson, sendJson } from "@/lib/api";
 import { arrayOf, compactText, formatDateTime, formatNumber, formatPrice, imageOf, workTitle } from "@/lib/format";
+import { personCategoryLabel } from "@/lib/searchView";
 
 type WorkItem = Record<string, any>;
 
@@ -103,7 +104,7 @@ export default function PersonPage() {
       const nextProfile = await getJson<Record<string, any>>(`/api/persons/${encodeURIComponent(id)}/profile`);
       setProfile(nextProfile);
       if (nextProfile.person?.name && !keyword) setKeyword(nextProfile.person.name);
-      document.title = `${nextProfile.person?.name || "声优详情"} - KoeScope`;
+      document.title = `${nextProfile.person?.name || "人物详情"} - KoeScope`;
     } catch (error: any) {
       showToast(error.message || "人物资料读取失败。");
     }
@@ -143,7 +144,7 @@ export default function PersonPage() {
 
   async function resolveKeyword(value = keyword) {
     const text = value.trim();
-    if (!text) return showToast("请输入声优名或马甲。");
+    if (!text) return showToast("请输入人物名或别名。");
     try {
       const payload = await sendJson<Record<string, any>>("/api/persons", { keyword: text, limit: 1 });
       const first = arrayOf<Record<string, any>>(payload.persons)[0];
@@ -179,10 +180,10 @@ export default function PersonPage() {
         },
         "PUT"
       );
-      showToast("已保存声优订阅。");
+      showToast("已保存人物关注。");
       await loadPerson();
     } catch (error: any) {
-      showToast(error.message || "订阅失败。");
+      showToast(error.message || "关注失败。");
     }
   }
 
@@ -190,10 +191,10 @@ export default function PersonPage() {
     if (!personId) return;
     try {
       await sendJson(`/api/persons/${encodeURIComponent(personId)}/subscription`, {}, "DELETE");
-      showToast("已取消订阅。");
+      showToast("已取消人物关注。");
       await loadPerson();
     } catch (error: any) {
-      showToast(error.message || "取消订阅失败。");
+      showToast(error.message || "取消关注失败。");
     }
   }
 
@@ -201,7 +202,7 @@ export default function PersonPage() {
     if (!personId) return;
     try {
       const payload = await sendJson<Record<string, any>>(`/api/persons/${encodeURIComponent(personId)}/subscription/check`, {});
-      showToast(`检查完成，可能新作 ${formatNumber(arrayOf(payload.newItems).length)} 件。`);
+      showToast(`检查完成，可能相关作品 ${formatNumber(arrayOf(payload.newItems).length)} 件。`);
       await Promise.all([loadPerson(), loadWorks()]);
     } catch (error: any) {
       showToast(error.message || "检查失败。");
@@ -223,31 +224,31 @@ export default function PersonPage() {
           <div className="person-title-block">
             <p className="eyebrow">{profile ? "数据来自本地搜索历史" : "输入关键词查找人物"}</p>
             <h2>{compactText(currentPerson.name, "加载中")}</h2>
-            <p>{personId ? `Bangumi person #${personId}` : "URL 中缺少有效的 Bangumi personId。"}</p>
+            <p>{personId ? `${personCategoryLabel(currentPerson)} · Bangumi person #${personId}` : "URL 中缺少有效的 Bangumi personId。"}</p>
             <div className="person-alias-summary">
               {aliases.slice(0, 8).map((alias) => <span className="next-chip" key={compactText(alias.value)}>{compactText(alias.value)}</span>)}
             </div>
           </div>
           <div className="person-lookup">
             <label className="search-field">
-              <span>声优名或马甲</span>
-              <input type="search" value={keyword} placeholder="例如：青山ゆかり" autoComplete="off" onChange={(event) => setKeyword(event.target.value)} />
+              <span>人物名或别名</span>
+              <input type="search" value={keyword} placeholder="例如：青山ゆかり / 田中ロミオ" autoComplete="off" onChange={(event) => setKeyword(event.target.value)} />
             </label>
             <button className="secondary-action" type="button" onClick={() => void resolveKeyword()}>查找</button>
           </div>
           <div className="person-subscription-box">
             <div>
-              <strong>{subscription ? "Subscribed" : "Not subscribed"}</strong>
+              <strong>{subscription ? "已关注人物" : "未关注人物"}</strong>
               <p>
                 {subscription
-                  ? `最近检查：${formatDateTime(subscription.lastCheckedAt)}；可能新作 ${formatNumber(subscription.lastNewItemCount)} 件。`
-                  : "Save this voice actor for low-frequency possible-new-work checks."}
+                  ? `最近检查：${formatDateTime(subscription.lastCheckedAt)}；可能相关作品 ${formatNumber(subscription.lastNewItemCount)} 件。`
+                  : "保存这个人物，用现有搜索词低频检查 DLsite 可能相关作品。"}
               </p>
             </div>
             <div className="mini-actions">
-              <button className="mini-button primary" type="button" onClick={saveSubscription}>Subscribe</button>
-              {subscription ? <button className="mini-button" type="button" onClick={checkSubscription}>Check now</button> : null}
-              {subscription ? <button className="mini-button" type="button" onClick={deleteSubscription}>Unsubscribe</button> : null}
+              <button className="mini-button primary" type="button" onClick={saveSubscription}>关注人物</button>
+              {subscription ? <button className="mini-button" type="button" onClick={checkSubscription}>立即检查</button> : null}
+              {subscription ? <button className="mini-button" type="button" onClick={deleteSubscription}>取消关注</button> : null}
             </div>
           </div>
         </section>
@@ -256,7 +257,7 @@ export default function PersonPage() {
           <aside className="side-panel">
             <div className="panel-head"><h2>别名</h2><span>{aliases.length}</span></div>
             <div className="alias-grid person-alias-list">
-              {aliases.map((alias) => <span className="alias-chip" key={compactText(alias.value)}>{compactText(alias.value)}{alias.isPenName ? " / 马甲" : ""}</span>)}
+              {aliases.map((alias) => <span className="alias-chip" key={compactText(alias.value)}>{compactText(alias.value)}{alias.isPenName ? " / 声优马甲" : ""}</span>)}
             </div>
             <div className="panel-head"><h2>最近搜索</h2><span>{recentSearches.length}</span></div>
             <div className="recent-list next-mini-list">

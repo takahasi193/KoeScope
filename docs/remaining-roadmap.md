@@ -25,7 +25,7 @@ Completed baseline:
 
 ## Phase 4: Local Personalization
 
-- [x] Local tags and notes: add a local-only annotation table for work `note`, `tags`, and `status` values such as `绁炰綔`, `宸插叆`, and `寰呰喘`. Done 2026-05-12 on branch `feature/phase-3-theme-cache`; backed by `work_annotations` CRUD and local-only API routes.
+- [x] Local tags and notes: add a local-only annotation table for work `note`, `tags`, and `status` values such as `神作`, `已入`, and `待购`. Done 2026-05-12 on branch `feature/phase-3-theme-cache`; backed by `work_annotations` CRUD and local-only API routes.
 - [x] Annotation UI: expose editing from the work history panel and watchlist items without writing anything back to DLsite account data. Done 2026-05-12 on branch `feature/phase-3-theme-cache`; Dashboard history panel saves annotations and watchlist/person work rows render local summaries.
 - [x] VA subscriptions: add subscribed voice actor records from the person detail page, then reuse the existing alias/search flow for low-frequency possible-new-work checks. Done 2026-05-12 on branch `feature/phase-4-subscriptions`; person detail page can now save, update, cancel, and manually check subscriptions.
 - [x] New-work reminders: create reminders without duplicating the same product/person pair, and phrase results as `可能的新作` unless identity evidence is definitive. Done 2026-05-12 on branch `feature/phase-4-subscriptions`; reminders now reuse the existing alert list with person-linked context.
@@ -46,3 +46,15 @@ Completed baseline:
 - [x] SQLite optimization: run `PRAGMA optimize` after cleanup, and use `VACUUM` only when needed after larger deletes. Done 2026-05-12 on branch `feature/phase-6-maintenance`; cleanup reports optimization details and gates `VACUUM` behind a larger-delete/free-page threshold.
 - [x] Maintenance UI or command: expose a clear local-only control path for dry-run and execution. Done 2026-05-12 on branch `feature/phase-6-maintenance`; Dashboard now shows a local data-maintenance preview and execute button.
 - [x] Phase 6 verification: prove dry-run counts match execution counts and Dashboard/history/alerts still read correctly after cleanup. Done 2026-05-12 on branch `feature/phase-6-maintenance`; repository, service, server, and Dashboard tests cover dry-run/execution parity and preserved history/alert reads.
+
+## Phase 7: Dashboard Performance And Route Maintainability
+
+- [x] Dashboard state aggregation: add a read-only `/api/dashboard/state` endpoint that combines the existing Dashboard payloads without replacing or removing the older focused APIs. Done 2026-05-14 on branch `optimize/phase-7-dashboard-foundation`.
+- [x] Route module split: keep `src/server.js` as app/static/error-handler assembly and move search, monitor, activity, account, maintenance, and query parsing into small server modules. Done 2026-05-14 on branch `optimize/phase-7-dashboard-foundation`.
+- [x] Dashboard frontend adoption: make both React and legacy Dashboard refresh paths use the aggregated state endpoint while keeping action endpoints unchanged. Done 2026-05-14 on branch `optimize/phase-7-dashboard-foundation`.
+- [x] Phase 7 verification: cover the aggregate API contract, old endpoint compatibility, Dashboard refresh behavior, full tests, Next build, and local smoke checks with background schedulers disabled. Done 2026-05-14 on branch `optimize/phase-7-dashboard-foundation`.
+
+## Phase 8: Search Resilience
+
+- [x] Direct keyword search: allow `/api/search/progressive` to start from the typed keyword without requiring a Bangumi candidate, and always search the typed keyword before selected Bangumi aliases. Done 2026-05-16 on branch `optimize/phase-7-dashboard-foundation`.
+- [x] General Bangumi person search: allow Bangumi lookup beyond voice actors, classify candidate people by career/type, pass those categories into DLsite person searches, and keep voice-actor pen-name selection as a sub-mode. Done 2026-05-16 on branch `feature/general-person-search`.

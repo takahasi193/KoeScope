@@ -503,7 +503,7 @@ function renderAlerts() {
         <p>${escapeHtml(alert.message)} · ${formatDate(alert.createdAt)}</p>
         <div class="muted-line">
           ${alertTypeBadge(alert)}
-          ${alert.personId ? `<a class="mini-link" href="/person.html?id=${encodeURIComponent(alert.personId)}">${escapeHtml(alert.personName || "声优详情")}</a>` : ""}
+          ${alert.personId ? `<a class="mini-link" href="/person.html?id=${encodeURIComponent(alert.personId)}">${escapeHtml(alert.personName || "人物详情")}</a>` : ""}
           ${historicalLowBadge(alert)}
         </div>
         <div class="mini-actions">
@@ -916,6 +916,19 @@ function notifyDashboardUnread() {
   }
 }
 
+function dashboardStateUrl() {
+  const params = new URLSearchParams({
+    floor: state.floor,
+    period: state.period,
+    category: state.category,
+    alertsStatus: state.alertsStatus,
+    activityLimit: "3",
+    alertLimit: "50",
+    retentionDays: "365",
+  });
+  return `/api/dashboard/state?${params.toString()}`;
+}
+
 async function refreshAll() {
   if (state.refreshInFlight) {
     scheduleRefresh(syncIsRunning() ? RUNNING_REFRESH_MS : 1000);
@@ -924,45 +937,19 @@ async function refreshAll() {
   state.refreshInFlight = true;
 
   try {
-    const [
-      summary,
-      status,
-      activityStatus,
-      activities,
-      activityAlertSummary,
-      ranking,
-      alerts,
-      watchlist,
-      account,
-      recommendations,
-      bundleRecommendations,
-      maintenance,
-    ] = await Promise.all([
-      getJson("/api/dashboard/summary"),
-      getJson("/api/sync/status"),
-      getJson("/api/activities/status"),
-      getJson("/api/activities?status=active&benefit=all&limit=3"),
-      getJson("/api/activity-alerts/summary?limit=5"),
-      getJson(`/api/rankings?floor=${encodeURIComponent(state.floor)}&period=${encodeURIComponent(state.period)}&category=${encodeURIComponent(state.category)}`),
-      getJson(`/api/alerts?status=${encodeURIComponent(state.alertsStatus)}&limit=50`),
-      getJson("/api/watchlist"),
-      getJson("/api/account/dlsite"),
-      getJson("/api/recommendations/affordable?limit=8"),
-      getJson("/api/recommendations/bundles?limit=4"),
-      getJson("/api/maintenance/snapshot-cleanup?retentionDays=365"),
-    ]);
-    state.summary = summary;
-    state.status = status;
-    state.activityStatus = activityStatus;
-    state.activities = activities;
-    state.activityAlertSummary = activityAlertSummary;
-    state.ranking = ranking;
-    state.alerts = alerts.items ?? [];
-    state.watchlist = watchlist.items ?? [];
-    state.account = account;
-    state.recommendations = recommendations;
-    state.bundleRecommendations = bundleRecommendations;
-    state.maintenance = maintenance;
+    const dashboardState = await getJson(dashboardStateUrl());
+    state.summary = dashboardState.summary ?? {};
+    state.status = dashboardState.syncStatus ?? {};
+    state.activityStatus = dashboardState.activityStatus ?? {};
+    state.activities = dashboardState.activities ?? {};
+    state.activityAlertSummary = dashboardState.activityAlerts ?? {};
+    state.ranking = dashboardState.rankings ?? {};
+    state.alerts = dashboardState.alerts?.items ?? [];
+    state.watchlist = dashboardState.watchlist?.items ?? [];
+    state.account = dashboardState.account ?? {};
+    state.recommendations = dashboardState.recommendations ?? {};
+    state.bundleRecommendations = dashboardState.bundles ?? {};
+    state.maintenance = dashboardState.maintenance ?? {};
     renderAll();
     notifyDashboardUnread();
   } catch (error) {

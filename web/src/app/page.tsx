@@ -5,7 +5,18 @@ import { Button, Input, Spinner } from "@heroui/react";
 import { SearchTopNav } from "@/components/TopNav";
 import { buildQuery, getJson, sendJson, wait } from "@/lib/api";
 import { arrayOf, compactText, formatNumber, formatPrice, imageOf, workTitle } from "@/lib/format";
-import { AGE_FILTERS, TYPE_FILTERS, aliasValues, countBy, matchesWorkFilter } from "@/lib/searchView";
+import {
+  AGE_FILTERS,
+  PERSON_CATEGORY_FILTERS,
+  TYPE_FILTERS,
+  aliasValues,
+  countBy,
+  defaultSearchAliases,
+  isVoiceActorPerson,
+  matchesWorkFilter,
+  personCategoryLabel,
+  prioritizeSearchAliases
+} from "@/lib/searchView";
 
 type Person = Record<string, any>;
 type WorkItem = Record<string, any>;
@@ -15,16 +26,12 @@ const orderOptions = [
   { key: "release_d", label: "最新" }
 ];
 
-function selectedAliases(selected: Set<string>) {
-  return [...selected].filter(Boolean);
+function selectedAliases(primaryKeyword: string, selected: Set<string>) {
+  return prioritizeSearchAliases(primaryKeyword, [...selected]);
 }
 
-function defaultAliasSelection(person: Person, limit: number) {
-  const values = aliasValues(person);
-  const penNames = arrayOf<Record<string, any>>(person.aliases)
-    .filter((alias) => alias.isPenName)
-    .map((alias) => compactText(alias.value));
-  return new Set((penNames.length ? penNames : values).slice(0, Math.max(1, limit)));
+function defaultAliasSelection(person: Person | null, limit: number, primaryKeyword = "") {
+  return new Set(defaultSearchAliases(person, limit, primaryKeyword));
 }
 
 function ResultCard({ item, onWatch }: { item: WorkItem; onWatch: (item: WorkItem) => void }) {
@@ -68,6 +75,7 @@ function ResultCard({ item, onWatch }: { item: WorkItem; onWatch: (item: WorkIte
 export default function SearchPage() {
   const [serverStatus, setServerStatus] = useState("连接中");
   const [keyword, setKeyword] = useState("");
+  const [personCategory, setPersonCategory] = useState("all");
   const [persons, setPersons] = useState<Person[]>([]);
   const [person, setPerson] = useState<Person | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -85,7 +93,8 @@ export default function SearchPage() {
   const [toast, setToast] = useState("");
   const pollingToken = useRef(0);
 
-  const aliases = useMemo(() => (person ? aliasValues(person) : []), [person]);
+  const aliases = useMemo(() => prioritizeSearchAliases(keyword, person ? aliasValues(person) : []), [keyword, person]);
+  const selectedPersonIsVoiceActor = isVoiceActorPerson(person);
   const allItems = arrayOf<WorkItem>(payload?.items);
   const typeSourceItems = useMemo(
     () => allItems.filter((item) => matchesWorkFilter(item, typeFilter, "all")),
@@ -143,15 +152,18 @@ export default function SearchPage() {
 
   async function resolvePersons() {
     const value = keyword.trim();
-    if (!value) return showToast("请输入声优名或马甲。");
+    if (!value) return showToast("请输入人物名或别名。");
     setBusy(true);
     try {
-      const data = await sendJson<Record<string, any>>("/api/persons", { keyword: value, limit: 10 });
+      const data = await sendJson<Record<string, any>>("/api/persons", { keyword: value, limit: 10, personCategory });
       const nextPersons = arrayOf<Person>(data.persons);
       setPersons(nextPersons);
       if (nextPersons[0]) {
         setPerson(nextPersons[0]);
-        setSelected(defaultAliasSelection(nextPersons[0], maxAliases));
+        setSelected(defaultAliasSelection(nextPersons[0], maxAliases, value));
+      } else {
+        setPerson(null);
+        setSelected(defaultAliasSelection(null, maxAliases, value));
       }
       showToast(nextPersons.length ? `找到 ${nextPersons.length} 个候选人物。` : "未找到候选人物。");
     } catch (error: any) {
@@ -163,7 +175,7 @@ export default function SearchPage() {
 
   function choosePerson(nextPerson: Person) {
     setPerson(nextPerson);
-    setSelected(defaultAliasSelection(nextPerson, maxAliases));
+    setSelected(defaultAliasSelection(nextPerson, maxAliases, keyword));
   }
 
   async function pollSearch(jobId: string, token: number) {
@@ -181,8 +193,7 @@ export default function SearchPage() {
   }
 
   async function runSearch() {
-    if (!person) return showToast("请先选择候选人物。");
-    const aliasesToSearch = selectedAliases(selected);
+    const aliasesToSearch = selectedAliases(keyword, selected);
     if (!aliasesToSearch.length) return showToast("请至少选择一个别名。");
     if ((scope === "all" || scope === "adult") && !adultConfirmed) {
       return showToast("包含 R18 范围时需要确认合法年龄与地区。");
@@ -193,7 +204,8 @@ export default function SearchPage() {
     try {
       const nextPayload = await sendJson<Record<string, any>>("/api/search/progressive", {
         keyword: keyword.trim(),
-        personId: person.id,
+        personId: person?.id,
+        person,
         aliases: aliasesToSearch,
         maxAliases,
         maxPagesPerAlias: maxPages,
@@ -230,15 +242,14 @@ export default function SearchPage() {
   }
 
   function setAliasMode(mode: "all" | "none" | "pen") {
-    if (!person) return;
     if (mode === "none") return setSelected(new Set());
     if (mode === "all") return setSelected(new Set(aliases));
-    setSelected(defaultAliasSelection(person, maxAliases));
+    setSelected(new Set(defaultSearchAliases(person, maxAliases, keyword, "penNames")));
   }
 
   const progress = payload?.progress ?? {};
   const resultSummary = payload
-    ? `${formatNumber(visibleItems.length)} / ${formatNumber(allItems.length)} 件显示；${progress.status || "ready"}，别名 ${formatNumber(progress.completedAliases ?? 0)} / ${formatNumber(progress.totalAliases ?? selected.size)}。`
+    ? `${formatNumber(visibleItems.length)} / ${formatNumber(allItems.length)} 件显示；${progress.status || "ready"}，别名 ${formatNumber(progress.completedAliases ?? 0)} / ${formatNumber(progress.totalAliases ?? selectedAliases(keyword, selected).length)}。`
     : "先解析人物，再选择别名搜索。";
 
   return (
@@ -248,7 +259,7 @@ export default function SearchPage() {
         <section className="workspace" data-section="01 Search">
           <div className="search-row">
             <label className="search-field">
-              <span>声优名或马甲</span>
+              <span>人物名或别名</span>
               <Input
                 className="ks-hero-input"
                 type="search"
@@ -265,12 +276,22 @@ export default function SearchPage() {
               {busy ? <Spinner className="ks-action-spinner" size="sm" color="current" /> : null}
               解析人物
             </Button>
-            <Button className="secondary-action ks-hero-button" type="button" isDisabled={busy || !person} aria-busy={busy} onPress={() => void runSearch()}>
+            <Button className="secondary-action ks-hero-button" type="button" isDisabled={busy || !keyword.trim()} aria-busy={busy} onPress={() => void runSearch()}>
               搜索 DLsite
             </Button>
           </div>
 
           <div className="settings-row">
+            <label>
+              <span>人物分类</span>
+              <select value={personCategory} onChange={(event) => setPersonCategory(event.target.value)}>
+                {PERSON_CATEGORY_FILTERS.map((filter) => (
+                  <option value={filter.key} key={filter.key}>
+                    {filter.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label>
               <span>默认勾选数</span>
               <input type="number" min={1} max={80} value={maxAliases} onChange={(event) => setMaxAliases(Number(event.target.value) || 1)} />
@@ -324,7 +345,9 @@ export default function SearchPage() {
                     {imageOf(candidate) ? <img src={imageOf(candidate)} alt="" /> : null}
                     <span>
                       <strong>{compactText(candidate.name, `#${candidate.id}`)}</strong>
-                      <small>{aliasValues(candidate).slice(0, 4).join(" / ") || "无别名记录"}</small>
+                      <small>
+                        {personCategoryLabel(candidate)} · {aliasValues(candidate).slice(0, 3).join(" / ") || "无别名记录"}
+                      </small>
                     </span>
                     <a className="mini-link" href={`/person.html?id=${encodeURIComponent(candidate.id)}`}>
                       详情
@@ -343,8 +366,8 @@ export default function SearchPage() {
               <span>{selected.size}</span>
             </div>
             <div className="alias-tools">
-              <button className="mini-action" type="button" onClick={() => setAliasMode("pen")}>
-                优先马甲
+              <button className="mini-action" type="button" disabled={!selectedPersonIsVoiceActor} onClick={() => setAliasMode("pen")}>
+                优先声优马甲
               </button>
               <button className="mini-action" type="button" onClick={() => setAliasMode("all")}>
                 全选

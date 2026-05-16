@@ -67,11 +67,11 @@ export function SearchTopNav({ status = "连接中" }: { status?: string }) {
     <header className="topbar">
       <div>
         <p className="eyebrow">KoeScope</p>
-        <h1>声优作品搜索</h1>
+        <h1>人物作品搜索</h1>
       </div>
       <nav className="top-actions" aria-label="页面操作">
         <Link className="top-link ks-nav-link" href="/person.html">
-          声优详情
+          人物详情
         </Link>
         <TemplateSwitcher initial="search" />
         <ThemeToggle />

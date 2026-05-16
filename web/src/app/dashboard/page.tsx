@@ -144,45 +144,29 @@ export default function DashboardPage() {
 
   async function loadDashboard() {
     try {
-      const [
-        nextSummary,
-        nextSyncStatus,
-        nextActivityStatus,
-        nextActivities,
-        nextActivityAlerts,
-        nextRankings,
-        nextAlerts,
-        nextWatchlist,
-        nextAccount,
-        nextRecommendations,
-        nextBundles,
-        nextMaintenance
-      ] = await Promise.all([
-        getJson<Json>("/api/dashboard/summary"),
-        getJson<Json>("/api/sync/status"),
-        getJson<Json>("/api/activities/status"),
-        getJson<Json>("/api/activities?status=active&benefit=all&limit=3"),
-        getJson<Json>("/api/activity-alerts/summary?limit=5"),
-        getJson<Json>(`/api/rankings${buildQuery({ floor, period, category })}`),
-        getJson<Json>(`/api/alerts${buildQuery({ status: alertsStatus, limit: 50 })}`),
-        getJson<Json>("/api/watchlist"),
-        getJson<Json>("/api/account/dlsite"),
-        getJson<Json>("/api/recommendations/affordable?limit=8"),
-        getJson<Json>("/api/recommendations/bundles?limit=4"),
-        getJson<Json>("/api/maintenance/snapshot-cleanup?retentionDays=365")
-      ]);
-      setSummary(nextSummary);
-      setSyncStatus(nextSyncStatus);
-      setActivityStatus(nextActivityStatus);
-      setActivities(nextActivities);
-      setActivityAlerts(nextActivityAlerts);
-      setRankings(nextRankings);
-      setAlerts(nextAlerts);
-      setWatchlist(nextWatchlist);
-      setAccount(nextAccount);
-      setRecommendations(nextRecommendations);
-      setBundles(nextBundles);
-      setMaintenance(nextMaintenance);
+      const nextState = await getJson<Json>(
+        `/api/dashboard/state${buildQuery({
+          floor,
+          period,
+          category,
+          alertsStatus,
+          activityLimit: 3,
+          alertLimit: 50,
+          retentionDays: 365
+        })}`
+      );
+      setSummary(nextState.summary ?? {});
+      setSyncStatus(nextState.syncStatus ?? {});
+      setActivityStatus(nextState.activityStatus ?? {});
+      setActivities(nextState.activities ?? { items: [] });
+      setActivityAlerts(nextState.activityAlerts ?? {});
+      setRankings(nextState.rankings ?? { items: [] });
+      setAlerts(nextState.alerts ?? { items: [] });
+      setWatchlist(nextState.watchlist ?? { items: [] });
+      setAccount(nextState.account ?? {});
+      setRecommendations(nextState.recommendations ?? { items: [] });
+      setBundles(nextState.bundles ?? { items: [] });
+      setMaintenance(nextState.maintenance ?? {});
     } catch (error: any) {
       showToast(error.message || "Dashboard 读取失败。");
     }
@@ -475,7 +459,7 @@ export default function DashboardPage() {
                 {alertItems.length ? alertItems.map((alert) => (
                   <article className="alert-card" key={alert.id}>
                     <strong>{compactText(alert.message, compactText(alert.title, "提醒"))}</strong>
-                    <p>{alert.personId ? <a className="mini-link" href={`/person.html?id=${encodeURIComponent(alert.personId)}`}>{compactText(alert.personName, "声优详情")}</a> : compactText(alert.productId)}</p>
+                    <p>{alert.personId ? <a className="mini-link" href={`/person.html?id=${encodeURIComponent(alert.personId)}`}>{compactText(alert.personName, "人物详情")}</a> : compactText(alert.productId)}</p>
                     <button className="mini-button" type="button" onClick={() => markAlertRead(String(alert.id))}>已读</button>
                   </article>
                 )) : <div className="next-empty">暂无提醒。</div>}

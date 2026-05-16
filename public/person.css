@@ -590,6 +590,31 @@
     padding-top: 50px;
   }
 
+  .person-subscription-box {
+    grid-column: 1 / -1;
+  }
+
+  .person-subscription-box .mini-actions {
+    justify-content: flex-start;
+  }
+
+  .person-shell .settings-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .person-shell .settings-row .status-pill,
+  .person-shell .settings-row .mini-action {
+    grid-column: 1 / -1;
+    justify-self: start;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .person-shell .settings-row .status-pill {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
   .person-avatar {
     width: 80px;
     height: 80px;

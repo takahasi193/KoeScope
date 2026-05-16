@@ -20,7 +20,9 @@ test("resolveFrontendPage supports exported flat and folder html output", async 
 test("server serves Next static pages before legacy public html when output exists", async (t) => {
   const outRoot = await fs.mkdtemp(path.join(os.tmpdir(), "koescope-next-route-"));
   t.after(() => fs.rm(outRoot, { recursive: true, force: true }));
+  await fs.mkdir(path.join(outRoot, "dashboard", "__next.dashboard"), { recursive: true });
   await fs.writeFile(path.join(outRoot, "dashboard.html"), "<!doctype html><p>Next dashboard</p>");
+  await fs.writeFile(path.join(outRoot, "dashboard", "__next.dashboard", "__PAGE__.txt"), "dashboard payload");
 
   const previous = process.env.KOESCOPE_NEXT_OUT;
   process.env.KOESCOPE_NEXT_OUT = outRoot;
@@ -38,4 +40,8 @@ test("server serves Next static pages before legacy public html when output exis
   const response = await fetch(`http://127.0.0.1:${port}/dashboard.html`);
   assert.equal(response.status, 200);
   assert.match(await response.text(), /Next dashboard/);
+
+  const payload = await fetch(`http://127.0.0.1:${port}/dashboard/__next.dashboard.__PAGE__.txt`);
+  assert.equal(payload.status, 200);
+  assert.equal(await payload.text(), "dashboard payload");
 });

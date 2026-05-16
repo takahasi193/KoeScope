@@ -17,6 +17,22 @@ const NAME_FIELD_PATTERN =
 const PEN_NAME_FIELD_PATTERN =
   /^(别名|別名|别称|別称|其他名义|其他名義|名义|名義|艺名|藝名|旧艺名|旧藝名|舊藝名|旧名|旧名义|旧名義)$/u;
 
+export const PERSON_CATEGORY_OPTIONS = [
+  { key: "all", label: "全部人物", careers: [] },
+  { key: "voice_actor", label: "声优", careers: ["seiyu"] },
+  { key: "illustration", label: "画师/插画", careers: ["illustrator", "artist"] },
+  { key: "manga", label: "漫画家", careers: ["mangaka"] },
+  { key: "writing", label: "脚本/作者", careers: ["writer"] },
+  { key: "performer", label: "演员/表演", careers: ["actor"] },
+  { key: "production", label: "制作/企划", careers: ["producer"] },
+  { key: "company", label: "公司/机构", careers: [] },
+  { key: "group", label: "组合/团体", careers: [] },
+  { key: "other", label: "其他人物", careers: [] },
+];
+
+const PERSON_CATEGORY_BY_KEY = new Map(PERSON_CATEGORY_OPTIONS.map((category) => [category.key, category]));
+const PERSON_CATEGORY_PRIORITY = PERSON_CATEGORY_OPTIONS.filter((category) => category.key !== "all");
+
 function compareKey(value) {
   return normalizeSpace(value)
     .normalize("NFKC")
@@ -26,6 +42,37 @@ function compareKey(value) {
 
 function cleanAlias(value) {
   return normalizeSpace(value).replace(TRIM_ALIAS_PATTERN, "");
+}
+
+function normalizeCareer(value) {
+  return normalizeSpace(value).toLocaleLowerCase("en-US");
+}
+
+function normalizeCareerList(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map(normalizeCareer).filter(Boolean))];
+}
+
+export function normalizePersonCategory(value) {
+  const key = normalizeSpace(value).toLocaleLowerCase("en-US");
+  return PERSON_CATEGORY_BY_KEY.has(key) ? key : "all";
+}
+
+export function careersForPersonCategory(value) {
+  const category = PERSON_CATEGORY_BY_KEY.get(normalizePersonCategory(value));
+  return category?.careers ?? [];
+}
+
+export function classifyPersonCategory(person = {}) {
+  const careers = new Set(normalizeCareerList(person.career));
+  const matched = PERSON_CATEGORY_PRIORITY.find(
+    (category) => category.careers.length && category.careers.some((career) => careers.has(career))
+  );
+  if (matched) return matched;
+
+  if (Number(person.type) === 2) return PERSON_CATEGORY_BY_KEY.get("company");
+  if (Number(person.type) === 3) return PERSON_CATEGORY_BY_KEY.get("group");
+  return PERSON_CATEGORY_BY_KEY.get("other");
 }
 
 function isNameField(key) {
@@ -160,43 +207,75 @@ export function extractPersonAliases(person, seedKeyword = "") {
     });
 }
 
-function scorePerson(person, keyword) {
+function scorePerson(person, keyword, options = {}) {
   const needle = compareKey(keyword);
   const aliases = extractPersonAliases(person, keyword);
   const keys = aliases.map((alias) => compareKey(alias.value));
+  const category = classifyPersonCategory(person);
   let score = 0;
 
   if (compareKey(person.name) === needle) score += 120;
   if (keys.some((key) => key === needle)) score += 100;
   if (keys.some((key) => key.includes(needle) || needle.includes(key))) score += 35;
-  if ((person.career ?? []).includes("seiyu")) score += 15;
+  if (options.personCategory && category.key === options.personCategory) score += 20;
   score += Math.min(aliases.length, 30) / 10;
 
   return score;
 }
 
-function compactPerson(person, keyword = "") {
+function compactPerson(person, keyword = "", options = {}) {
   const aliases = extractPersonAliases(person, keyword);
+  const category = classifyPersonCategory(person);
   return {
     id: person.id,
     name: person.name,
     image: person.images?.medium ?? person.images?.small ?? person.img ?? "",
-    career: person.career ?? [],
+    career: normalizeCareerList(person.career),
+    type: person.type ?? null,
+    personCategory: category.key,
+    personCategoryLabel: category.label,
     gender: person.gender ?? "",
     summary: person.summary ?? "",
     sourceUrl: `https://bgm.tv/person/${person.id}`,
-    score: scorePerson(person, keyword),
+    score: scorePerson(person, keyword, options),
     aliases,
   };
 }
 
-export async function searchPersons(keyword, limit = 10) {
-  const normalizedKeyword = normalizeSpace(keyword);
-  if (!normalizedKeyword) throw new Error("keyword is required");
+function normalizeSearchOptions(options = {}) {
+  const category = normalizePersonCategory(options.personCategory ?? options.category);
+  const careers = normalizeCareerList(options.careers ?? options.career);
+  return {
+    personCategory: category,
+    careers: careers.length ? careers : careersForPersonCategory(category),
+  };
+}
 
-  const cacheKey = `persons:${normalizedKeyword}:${limit}`;
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
+function summarizeCategories(persons) {
+  return persons.reduce((counts, person) => {
+    const key = person.personCategory || "other";
+    counts[key] = (counts[key] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
+function careerFiltersForSearch(searchOptions) {
+  if (!searchOptions.careers.length) return [[]];
+  if (searchOptions.personCategory !== "all" && searchOptions.careers.length > 1) {
+    return searchOptions.careers.map((career) => [career]);
+  }
+  return [searchOptions.careers];
+}
+
+async function fetchPersonSearchPayload(normalizedKeyword, limit, careers = []) {
+  const body = {
+    keyword: normalizedKeyword,
+  };
+  if (careers.length) {
+    body.filter = {
+      career: careers,
+    };
+  }
 
   const response = await politeFetch(`${API_BASE}/search/persons?limit=${limit}`, {
     method: "POST",
@@ -205,17 +284,44 @@ export async function searchPersons(keyword, limit = 10) {
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify({
-      keyword: normalizedKeyword,
-      filter: {
-        career: ["seiyu"],
-      },
-    }),
+    body: JSON.stringify(body),
   });
 
-  const payload = await response.json();
-  const persons = (payload.data ?? [])
-    .map((person) => compactPerson(person, normalizedKeyword))
+  return response.json();
+}
+
+function mergedPayloadPersons(payloads) {
+  const persons = new Map();
+  for (const payload of payloads) {
+    for (const person of payload.data ?? []) {
+      const key = person.id ?? person.name;
+      if (!persons.has(key)) persons.set(key, person);
+    }
+  }
+  return [...persons.values()];
+}
+
+function matchesRequestedPersonCategory(person, searchOptions) {
+  return searchOptions.personCategory === "all" || person.personCategory === searchOptions.personCategory;
+}
+
+export async function searchPersons(keyword, limit = 10, options = {}) {
+  const normalizedKeyword = normalizeSpace(keyword);
+  if (!normalizedKeyword) throw new Error("keyword is required");
+  const searchOptions = normalizeSearchOptions(options);
+
+  const cacheKey = `persons:${normalizedKeyword}:${limit}:${searchOptions.personCategory}:${searchOptions.careers.join(",")}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  const payloads = [];
+  for (const careers of careerFiltersForSearch(searchOptions)) {
+    payloads.push(await fetchPersonSearchPayload(normalizedKeyword, limit, careers));
+  }
+
+  const persons = mergedPayloadPersons(payloads)
+    .map((person) => compactPerson(person, normalizedKeyword, searchOptions))
+    .filter((person) => matchesRequestedPersonCategory(person, searchOptions))
     .sort((a, b) => b.score - a.score);
 
   for (const person of persons) {
@@ -224,7 +330,10 @@ export async function searchPersons(keyword, limit = 10) {
 
   const result = {
     keyword: normalizedKeyword,
-    total: payload.total ?? persons.length,
+    personCategory: searchOptions.personCategory,
+    categoryOptions: PERSON_CATEGORY_OPTIONS,
+    categories: summarizeCategories(persons),
+    total: payloads.length === 1 && searchOptions.personCategory === "all" ? payloads[0].total ?? persons.length : persons.length,
     persons,
   };
   cache.set(cacheKey, result);

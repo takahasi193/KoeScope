@@ -161,6 +161,149 @@ test("server handles missing resources and invalid monitor query values", async 
   });
 });
 
+test("server can start DLsite search directly from the typed keyword", async () => {
+  let createdJob = null;
+  const searchJobStore = {
+    create: (job) => {
+      createdJob = job;
+      return {
+        keyword: job.keyword,
+        person: job.person,
+        searchedAliases: job.selectedAliasValues,
+        progress: { jobId: "manual-search", status: "completed", isComplete: true },
+        total: 0,
+        items: [],
+      };
+    },
+    get: () => null,
+  };
+  const app = createApp({
+    monitor: createMockMonitor(),
+    searchHistory: createMockSearchHistory(),
+    searchJobStore,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/search/progressive`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keyword: " 未登録マイナー名 ", aliases: [], scope: "nonAdult" }),
+    });
+
+    assert.equal(response.status, 202);
+    const payload = await response.json();
+    assert.deepEqual(payload.searchedAliases, ["未登録マイナー名"]);
+    assert.equal(payload.person.name, "未登録マイナー名");
+    assert.equal(createdJob.person.id, null);
+    assert.deepEqual(createdJob.selectedAliasValues, ["未登録マイナー名"]);
+  });
+});
+
+test("server passes person category filters to Bangumi person search", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestBody = null;
+  let localBaseUrl = "";
+
+  globalThis.fetch = async (url, options = {}) => {
+    if (localBaseUrl && String(url).startsWith(localBaseUrl)) {
+      return originalFetch(url, options);
+    }
+    requestBody = JSON.parse(options.body);
+    return {
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        total: 1,
+        data: [
+          {
+            id: 456,
+            name: "Example Actor",
+            type: 1,
+            career: ["actor"],
+            images: {},
+            infobox: [],
+          },
+        ],
+      }),
+    };
+  };
+
+  try {
+    const app = createApp({ monitor: createMockMonitor(), searchHistory: createMockSearchHistory() });
+    await withServer(app, async (baseUrl) => {
+      localBaseUrl = baseUrl;
+      const response = await fetch(`${baseUrl}/api/persons`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyword: "Example Actor", limit: 10, personCategory: "performer" }),
+      });
+
+      assert.equal(response.status, 200);
+      const payload = await response.json();
+      assert.deepEqual(requestBody.filter?.career, ["actor"]);
+      assert.equal(payload.personCategory, "performer");
+      assert.equal(payload.persons[0].personCategoryLabel, "演员/表演");
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("server searches the typed keyword before selected Bangumi aliases", async () => {
+  let createdJob = null;
+  const searchJobStore = {
+    create: (job) => {
+      createdJob = job;
+      return {
+        keyword: job.keyword,
+        person: job.person,
+        searchedAliases: job.selectedAliasValues,
+        progress: { jobId: "alias-search", status: "completed", isComplete: true },
+        total: 0,
+        items: [],
+      };
+    },
+    get: () => null,
+  };
+  const app = createApp({
+    monitor: createMockMonitor(),
+    searchHistory: createMockSearchHistory(),
+    searchJobStore,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/search/progressive`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        keyword: "Manual Alias",
+        personId: 123,
+        person: {
+          id: 123,
+          name: "Canonical Person",
+          image: "https://img.example/person.jpg",
+          career: ["writer"],
+          personCategory: "writing",
+          personCategoryLabel: "脚本/作者",
+          aliases: [{ value: "Bangumi Alias", isPenName: true, sources: ["bangumi"], sourceKeys: ["alias"] }],
+        },
+        aliases: ["Bangumi Alias", "Manual Alias"],
+        scope: "nonAdult",
+      }),
+    });
+
+    assert.equal(response.status, 202);
+    const payload = await response.json();
+    assert.deepEqual(payload.searchedAliases, ["Manual Alias", "Bangumi Alias"]);
+    assert.equal(createdJob.person.id, 123);
+    assert.equal(createdJob.person.name, "Canonical Person");
+    assert.equal(createdJob.person.personCategory, "writing");
+    assert.equal(createdJob.person.personCategoryLabel, "脚本/作者");
+    assert.equal(createdJob.person.aliases[1].sources[0], "bangumi");
+  });
+});
+
 test("server validates watchlist import payloads before using the monitor", async () => {
   const app = createApp({ monitor: createMockMonitor(), searchHistory: createMockSearchHistory() });
   await withServer(app, async (baseUrl) => {

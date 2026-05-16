@@ -70,9 +70,35 @@ function searchIsRunning() {
   return Boolean(state.results?.progress && !state.results.progress.isComplete);
 }
 
+function currentKeyword() {
+  return (els.keywordInput.value.trim() || state.keyword || "").trim();
+}
+
+function aliasKey(value) {
+  return String(value ?? "").trim().normalize("NFKC").toLocaleLowerCase("ja-JP");
+}
+
+function prioritizeSearchAliases(primaryKeyword, aliases = [], limit = 80) {
+  const seen = new Set();
+  const result = [];
+  for (const value of [primaryKeyword, ...aliases]) {
+    const alias = String(value ?? "").trim();
+    const key = aliasKey(alias);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(alias);
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+
+function canRunSearch() {
+  return Boolean(currentKeyword() || state.selectedPersonId);
+}
+
 function setBusy(isBusy, label = "") {
   els.resolveButton.disabled = isBusy;
-  els.runButton.disabled = isBusy || !state.selectedPersonId || searchIsRunning();
+  els.runButton.disabled = isBusy || !canRunSearch() || searchIsRunning();
   els.orderInput?.querySelectorAll("button").forEach((button) => {
     button.disabled = isBusy || searchIsRunning();
   });
@@ -114,7 +140,7 @@ function setResultOrder(order, { refresh = false } = {}) {
   if (els.orderInput) els.orderInput.dataset.order = normalized;
   renderResultOrder();
 
-  if (refresh && state.results && selectedPerson()) {
+  if (refresh && state.results && canRunSearch()) {
     runProgressiveDlsiteSearch();
     return;
   }
@@ -181,23 +207,30 @@ function renderCandidates() {
 
 function renderAliases() {
   const person = selectedPerson();
+  const keyword = currentKeyword();
+  const personAliases = person?.aliases ?? [];
+  const aliases = prioritizeSearchAliases(
+    keyword,
+    personAliases.map((alias) => alias.value)
+  );
   els.aliasGrid.innerHTML = "";
-  els.aliasCount.textContent = person ? String(person.aliases.length) : "0";
+  els.aliasCount.textContent = String(aliases.length);
 
-  if (!person) {
+  if (aliases.length === 0) {
     els.aliasGrid.innerHTML = '<div class="empty">请选择 Bangumi 候选人物。</div>';
     els.runButton.disabled = true;
     return;
   }
 
   const maxAliases = Number(els.maxAliasesInput.value) || 12;
-  person.aliases.forEach((alias, index) => {
+  aliases.forEach((aliasValue, index) => {
+    const sourceAlias = personAliases.find((alias) => alias.value === aliasValue);
     const label = document.createElement("label");
-    label.className = `alias-chip ${alias.isPenName ? "pen" : ""}`;
-    label.title = alias.sourceKeys.join(", ");
+    label.className = `alias-chip ${sourceAlias?.isPenName || aliasValue === keyword ? "pen" : ""}`;
+    label.title = sourceAlias?.sourceKeys?.join(", ") || (aliasValue === keyword ? "input:keyword" : "");
     label.innerHTML = `
-      <input type="checkbox" value="${escapeAttribute(alias.value)}" ${index < maxAliases ? "checked" : ""} />
-      <span>${escapeHtml(alias.value)}</span>
+      <input type="checkbox" value="${escapeAttribute(aliasValue)}" ${index < maxAliases ? "checked" : ""} />
+      <span>${escapeHtml(aliasValue)}</span>
     `;
     els.aliasGrid.append(label);
   });
@@ -344,7 +377,7 @@ function renderResults() {
   renderTabs();
   renderResultOrder();
   els.resultList.innerHTML = "";
-  els.runButton.disabled = !state.selectedPersonId || searchIsRunning();
+  els.runButton.disabled = !canRunSearch() || searchIsRunning();
 
   if (!results) {
     els.resultSummary.textContent = "先解析人物，再选择别名搜索。";
@@ -441,7 +474,10 @@ function verifiedAliasLine(item) {
 }
 
 function selectedAliases() {
-  return [...els.aliasGrid.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value);
+  return prioritizeSearchAliases(
+    currentKeyword(),
+    [...els.aliasGrid.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value)
+  );
 }
 
 function scheduleSearchPoll(delayMs = 1000) {
@@ -496,7 +532,7 @@ async function pollProgressiveSearch(jobId, token) {
 async function resolvePersons() {
   const keyword = els.keywordInput.value.trim();
   if (!keyword) {
-    toast("请输入声优名或马甲。");
+    toast("请输入人物名或别名。");
     return;
   }
 
@@ -524,8 +560,9 @@ async function resolvePersons() {
 
 async function runProgressiveDlsiteSearch() {
   const person = selectedPerson();
-  if (!person) {
-    toast("请先选择候选人物。");
+  const keyword = currentKeyword();
+  if (!keyword && !person) {
+    toast("请输入人物名或别名。");
     return;
   }
 
@@ -546,8 +583,9 @@ async function runProgressiveDlsiteSearch() {
 
   try {
     const payload = await postJson("/api/search/progressive", {
-      keyword: state.keyword || els.keywordInput.value.trim(),
-      personId: person.id,
+      keyword,
+      personId: person?.id,
+      person,
       aliases,
       scope,
       order: currentResultOrder(),
@@ -580,15 +618,14 @@ async function runProgressiveDlsiteSearch() {
 
 function setAliasSelection(mode) {
   const person = selectedPerson();
-  if (!person) return;
 
   const inputs = [...els.aliasGrid.querySelectorAll('input[type="checkbox"]')];
   const maxAliases = Number(els.maxAliasesInput.value) || 12;
   inputs.forEach((input, index) => {
-    const alias = person.aliases[index];
+    const alias = person?.aliases?.find((candidate) => candidate.value === input.value);
     if (mode === "all") input.checked = true;
     if (mode === "none") input.checked = false;
-    if (mode === "pen") input.checked = alias?.isPenName || index === 0;
+    if (mode === "pen") input.checked = alias?.isPenName || input.value === currentKeyword() || index === 0;
   });
 
   if (mode !== "all") {
@@ -666,6 +703,11 @@ els.resolveButton.addEventListener("click", resolvePersons);
 els.runButton.addEventListener("click", runProgressiveDlsiteSearch);
 els.keywordInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") resolvePersons();
+});
+els.keywordInput.addEventListener("input", () => {
+  state.keyword = els.keywordInput.value.trim();
+  renderAliases();
+  renderResults();
 });
 els.maxAliasesInput.addEventListener("change", renderAliases);
 els.orderInput?.addEventListener("click", (event) => {

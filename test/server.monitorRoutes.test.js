@@ -117,9 +117,9 @@ function createMockMonitor() {
       items: [{ circle: "Local Circle", totalPriceJpy: 900, itemCount: 2, claimsCheckoutOptimization: false }],
       disclaimer: "Local public-price analysis only.",
     }),
-    runSnapshotCleanup: ({ dryRun }) => ({
+    runSnapshotCleanup: ({ dryRun, retentionDays = 365 }) => ({
       dryRun,
-      retentionDays: 365,
+      retentionDays,
       cutoffAt: "2025-05-12T00:00:00.000Z",
       priceSnapshots: { olderThanCutoff: 2, protectedOlder: 1, deletable: 1, deleted: dryRun ? 0 : 1 },
       rankingSnapshots: { olderThanCutoff: 3, protectedOlder: 1, deletable: 2, deleted: dryRun ? 0 : 2 },
@@ -167,6 +167,27 @@ test("monitor routes expose sync, summary, rankings, and alerts", async () => {
     const summaryPayload = await summary.json();
     assert.equal(summaryPayload.totalWorks, 0);
     assert.equal(summaryPayload.activeActivities, 1);
+
+    const dashboardState = await fetch(
+      `${baseUrl}/api/dashboard/state?floor=maniax&period=month&category=voice&alertsStatus=all&activityLimit=2&alertLimit=7&retentionDays=180`
+    );
+    assert.equal(dashboardState.status, 200);
+    const dashboardStatePayload = await dashboardState.json();
+    assert.equal(dashboardStatePayload.summary.activeActivities, 1);
+    assert.equal(dashboardStatePayload.syncStatus.nextScheduledAt, "2026-05-09T00:00:00.000Z");
+    assert.equal(dashboardStatePayload.activityStatus.nextScheduledAt, "2026-05-09T06:00:00.000Z");
+    assert.equal(dashboardStatePayload.activities.limit, 2);
+    assert.equal(dashboardStatePayload.activities.benefit, "all");
+    assert.equal(dashboardStatePayload.activityAlerts.items.length, 1);
+    assert.equal(dashboardStatePayload.rankings.floor, "maniax");
+    assert.equal(dashboardStatePayload.rankings.period, "month");
+    assert.equal(dashboardStatePayload.rankings.category, "voice");
+    assert.deepEqual(dashboardStatePayload.alerts.items, []);
+    assert.deepEqual(dashboardStatePayload.watchlist.items, []);
+    assert.equal(dashboardStatePayload.account.hasSession, false);
+    assert.deepEqual(dashboardStatePayload.recommendations.items, []);
+    assert.equal(dashboardStatePayload.bundles.items[0].claimsCheckoutOptimization, false);
+    assert.equal(dashboardStatePayload.maintenance.retentionDays, 180);
 
     const activityAlertSummary = await fetch(`${baseUrl}/api/activity-alerts/summary?limit=1`);
     assert.equal(activityAlertSummary.status, 200);

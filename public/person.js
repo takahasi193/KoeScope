@@ -210,7 +210,7 @@ function renderProfile() {
   if (!profile) return;
 
   const person = profile.person ?? {};
-  document.title = `${person.name || "声优详情"} - KoeScope`;
+  document.title = `${person.name || "人物详情"} - KoeScope`;
   els.personName.textContent = person.name || "未命名人物";
   els.personImage.src = person.image || "";
   els.personImage.alt = person.name || "";
@@ -231,7 +231,7 @@ function renderSubscription() {
   const subscription = state.subscription;
   if (!subscription) {
     els.subscriptionStatus.textContent = "\u672a\u8ba2\u9605";
-    els.subscriptionMeta.textContent = "\u4fdd\u5b58\u8fd9\u4e2a\u58f0\u4f18\u540e\uff0cKoeScope \u4f1a\u4f4e\u9891\u68c0\u67e5\u53ef\u80fd\u7684\u65b0\u4f5c\u3002";
+    els.subscriptionMeta.textContent = "\u4fdd\u5b58\u8fd9\u4e2a\u4eba\u7269\u540e\uff0cKoeScope \u4f1a\u4f4e\u9891\u68c0\u67e5 DLsite \u53ef\u80fd\u76f8\u5173\u4f5c\u54c1\u3002";
     els.subscribeButton.textContent = "\u8ba2\u9605\u65b0\u4f5c";
     els.checkSubscriptionButton.hidden = true;
     els.unsubscribeButton.hidden = true;
@@ -425,7 +425,7 @@ function setSubscriptionBusy(busy) {
 async function resolveKeyword() {
   const keyword = els.keywordInput.value.trim();
   if (!keyword) {
-    toast("请输入声优名或马甲。");
+    toast("请输入人物名或别名。");
     return;
   }
 

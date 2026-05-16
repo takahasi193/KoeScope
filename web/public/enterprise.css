@@ -1006,6 +1006,27 @@ html[data-page-transition="slide-in-right"] .next-root {
 }
 
 @media (max-width: 620px) {
+  .person-shell .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .person-shell .main-panel > .settings-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .person-shell .main-panel > .settings-row .status-pill,
+  .person-shell .main-panel > .settings-row .mini-action {
+    grid-column: 1 / -1;
+    justify-self: start;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .person-shell .main-panel > .settings-row .status-pill {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
   .result-card {
     grid-template-columns: 86px minmax(0, 1fr);
     gap: 12px;
