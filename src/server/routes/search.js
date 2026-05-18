@@ -1,6 +1,7 @@
 import { getPerson, searchPersons } from "../../lib/bangumi.js";
 import { normalizeSpace } from "../../lib/cache.js";
 import { normalizeSearchOrder, searchOrderLabel } from "../../lib/dlsite.js";
+import { applyLocalSearchOverlay } from "../../lib/localSearchOverlay.js";
 import { createPublicSearchQuery, withSearchCacheRuntimeState } from "../../lib/searchCacheKey.js";
 import { asyncHandler } from "../http.js";
 import {
@@ -132,12 +133,71 @@ function readCachedSearchPayload(searchCache, queryKey) {
   }
 }
 
-function cachePayloadWithBackgroundRefresh(cachedPayload, refreshPayload) {
+function productIdKey(value) {
+  return normalizeSpace(value).toUpperCase();
+}
+
+function payloadProductIdSet(payload = {}) {
+  return new Set((payload.items ?? []).map((item) => productIdKey(item?.productId)).filter(Boolean));
+}
+
+function filterItemsByProductIds(items, productIds) {
+  return (Array.isArray(items) ? items : []).filter((item) => productIds.has(productIdKey(item?.productId)));
+}
+
+function filterAccountListsByProductIds(lists = {}, productIds) {
+  return Object.fromEntries(
+    Object.entries(lists ?? {}).map(([listType, list]) => [
+      listType,
+      {
+        ...list,
+        productIds: (Array.isArray(list?.productIds) ? list.productIds : []).filter((productId) =>
+          productIds.has(productIdKey(productId))
+        ),
+      },
+    ])
+  );
+}
+
+function annotationHasPrivateContext(annotation) {
+  return Boolean(
+    annotation?.updatedAt ||
+      annotation?.createdAt ||
+      annotation?.note ||
+      annotation?.status ||
+      (Array.isArray(annotation?.tags) && annotation.tags.length)
+  );
+}
+
+function readCachedPayloadLocalOverlay(cachedPayload, monitor) {
+  try {
+    const productIds = payloadProductIdSet(cachedPayload);
+    const accountSyncState = monitor?.getAccountSyncState?.() ?? {};
+    const personId = cachedPayload?.person?.id ?? cachedPayload?.cache?.publicQuery?.personId;
+    const subscription = personId ? monitor?.getPersonSubscription?.(personId) : null;
+
+    return {
+      watchlist: filterItemsByProductIds(monitor?.getWatchlist?.() ?? [], productIds),
+      annotations: [...productIds]
+        .map((productId) => monitor?.getWorkAnnotation?.(productId))
+        .filter(annotationHasPrivateContext),
+      account: monitor?.getAccountProfile?.() ?? {},
+      accountLists: filterAccountListsByProductIds(accountSyncState.lists, productIds),
+      subscriptions: subscription ? [subscription] : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+function cachePayloadWithBackgroundRefresh(cachedPayload, refreshPayload, monitor) {
   const refresh = refreshPayload?.cache?.refresh ?? {};
   const jobId = refresh.jobId || refreshPayload?.progress?.jobId || "";
   const status = refresh.status || refreshPayload?.progress?.status || "running";
+  const localOverlay = readCachedPayloadLocalOverlay(cachedPayload, monitor);
+  const overlaidPayload = localOverlay ? applyLocalSearchOverlay(cachedPayload, localOverlay) : cachedPayload;
   return {
-    ...cachedPayload,
+    ...overlaidPayload,
     cache: withSearchCacheRuntimeState(cachedPayload.cache, {
       jobId,
       status,
@@ -214,7 +274,7 @@ export function registerSearchRoutes(app, { monitor, searchHistory, searchJobSto
         options,
         cache,
       });
-      if (cachedPayload) return res.status(202).json(cachePayloadWithBackgroundRefresh(cachedPayload, payload));
+      if (cachedPayload) return res.status(202).json(cachePayloadWithBackgroundRefresh(cachedPayload, payload, monitor));
       res.status(202).json(payload);
     })
   );
