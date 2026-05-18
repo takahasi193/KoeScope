@@ -1,209 +1,140 @@
 # KoeScope
 
-## React / Next.js frontend update
+KoeScope 是一个本地优先的 DLsite / Bangumi 声优作品检索与监控工具。它可以按声优名或马甲解析 Bangumi 人物别名，渐进式搜索 DLsite 公开结果，并把排行榜、价格快照、关注列表、活动提醒和账号页面导入结果保存在本机 SQLite 数据库里。
 
-KoeScope now includes a React + Next.js frontend in `web/`. The backend is still the existing Express 5 + SQLite service; the new frontend is a static-exported Next App Router app served by Express from `web/out` when present.
+项目适合两个场景：快速确认某位声优的公开作品脉络，以及长期本地监控自己关注的 DLsite 作品、价格和活动。
 
-What changed:
-- `web/` adds Next.js, React, TypeScript, HeroUI and the shared frontend utilities used by the search, person, dashboard and activities pages.
-- Express serves the Next static export before the legacy `public/` HTML files, while preserving the old entry URLs: `/`, `/person.html`, `/dashboard.html`, `/activities.html`, plus extension-friendly dashboard links.
-- The UI now uses an enterprise-style HeroUI layer with dark mode, polished cards, larger ranking artwork, clearer filter chips, staggered card entrance animations and a two-template switcher for Search / Monitor.
-- The Search / Monitor template switcher uses Next client routing with prefetching instead of full document reloads, so switching between the two main templates feels like a smooth horizontal page transition.
-- Existing `/api/*`, SQLite storage, scheduler behavior and Chrome companion extension contracts remain unchanged.
+## 快速开始
 
-Frontend commands:
+需要 Node.js 20 或更高版本。
+
 ```bash
-npm run web:dev      # run the Next frontend dev server
-npm run web:build    # build the static export into web/out
-npm run web:test     # run frontend mapper/client tests
-npm test             # run backend tests, then web:test
+git clone https://github.com/takahasi193/KoeScope.git
+cd KoeScope
+npm install
+npm start
 ```
 
-When changing frontend code, run `npm run web:build` before starting the Express app if you want `http://localhost:5178` to serve the latest static UI. Generated folders such as `web/.next/`, `web/out/` and `web/next-env.d.ts` are intentionally ignored by git.
+首次运行 `npm start` 时，如果仓库里还没有静态前端产物，脚本会自动执行一次 `npm run web:build`，然后启动本地 Express 服务。启动后打开：
 
-## UI 截图
+- 搜索工作台：`http://localhost:5178`
+- 声优详情页：`http://localhost:5178/person.html`
+- Monitor 仪表盘：`http://localhost:5178/dashboard.html`
+- 活动中心：`http://localhost:5178/activities.html`
 
-以下截图来自本地静态前端和临时空数据库，用于说明界面布局，不包含个人账号、愿望单或收藏数据。
+Windows 用户也可以双击项目根目录的 `Start-KoeScope.cmd`，或双击 `E:\DL Manager\Start-KoeScope.cmd`。启动器会检查 5178 端口和 `/api/health`，必要时在后台启动 `npm start`。
+
+## 功能亮点
+
+- 声优 / 马甲解析：通过 Bangumi API 获取候选人物、头像、infobox 和别名。
+- 渐进式 DLsite 搜索：先显示首批结果，后续页面继续在后台补齐。
+- 本地优先缓存：公开搜索缓存与本地关注、注释、账号导入状态叠加展示，不把个人状态写回公开数据。
+- 年龄与作品类型筛选：支持全年龄、R18、混合范围和作品形态分类。
+- 声优详情页：汇总人物资料、别名、本地搜索记录、热门作品和最新作品。
+- Monitor 仪表盘：查看排行榜快照、价格变化、关注作品、提醒和点数推荐。
+- 活动中心：浏览 DLsite 公开活动，并按福利类型、状态、关键词和“与我相关”过滤。
+- Chrome companion：可从已登录的 DLsite 页面导入点数、愿望单、收藏和已购作品到本地。
+
+## 界面预览
+
+这些截图来自本地静态前端和临时空数据库，不包含个人账号、愿望单或收藏数据。
 
 ### 搜索工作台
 
 ![KoeScope 搜索工作台](docs/screenshots/koescope-search.png)
 
-首页直接进入声优作品搜索工作台：上方是声优名/马甲输入、人物解析、DLsite 搜索和 R18 合法确认；下方按候选人物、别名选择和结果列表分区，方便先解析人物，再逐步补齐搜索结果。
-
 ### Monitor 仪表盘
 
 ![KoeScope Monitor 仪表盘](docs/screenshots/koescope-monitor.png)
-
-Monitor 聚合本地 SQLite 数据：顶部指标条展示作品、折扣、关注、提醒、点数与活动数量；中间保留 DLsite 活动摘要；下方继续呈现排行榜、账号同步、点数推荐、提醒、关注作品和数据维护入口。
 
 ### 活动中心
 
 ![KoeScope 活动中心](docs/screenshots/koescope-activities.png)
 
-活动中心用于集中浏览 DLsite 公开活动：指标条显示当前结果和提醒数量；筛选区支持福利类型、状态、关键词和“只看与我相关”；活动列表会把公开活动摘要、本地相关性和已读状态放在同一个页面中处理。
-
-本地 DLsite 辅助应用。输入声优名或马甲后，应用会从 Bangumi 人物资料中解析别名，再按别名渐进式搜索 DLsite 公开结果；同时提供本地 Monitor，用 SQLite 保存排行榜、价格快照、关注列表、账号同步摘要、活动提醒和可能相关的优惠活动。
-
-## 功能
-
-- 声优 / 马甲解析：通过 Bangumi API 获取候选人物和 infobox 别名。
-- 渐进式 DLsite 搜索：首批结果先显示，后续页数在后台继续补入。
-- 年龄与作品类型筛选：支持全年龄、R18、混合范围和作品形态分类。
-- 声优详情页：汇总人物头像、Bangumi ID、别名、本地搜索记录、热门作品和最新作品。
-- Monitor 仪表盘：查看排行榜快照、价格变化、关注作品、提醒和点数推荐。
-- DLsite 账号同步：通过 Chrome companion extension 导入已登录页面，读取点数、愿望单、收藏和已购作品的本地缓存。
-- 活动中心：查看 DLsite 公开活动，按福利类型、状态、搜索词和“与我相关”过滤，并标记活动提醒已读。
-- 活动匹配：基于公开活动信息、本地关注和账号愿望单做保守匹配；优惠券领取、适用条件和最终价格仍以 DLsite 页面为准。
-- 明亮工具界面：使用青蓝主色、白底、编号分区、轻量表格和克制 hover 动效，桌面与手机端都保持可操作。
-
-## 快速开始
+## 常用命令
 
 ```bash
-npm install
-npm start
+npm install        # 安装依赖
+npm start          # 首次自动构建静态前端，然后启动本地服务
+npm test           # 运行后端 node:test 与前端工具测试
+npm run web:build  # 手动重新构建 Next.js 静态前端
+npm run web:dev    # 单独运行 Next.js 开发服务器
+npm run dev        # 以 watch 模式运行 Express 后端
 ```
 
-打开：
-
-- 搜索页：`http://localhost:5178`
-- 声优详情页：`http://localhost:5178/person.html`
-- Monitor：`http://localhost:5178/dashboard.html`
-- 活动中心：`http://localhost:5178/activities.html`
-
-Windows 快捷启动：
-
-- 双击项目根目录的 `Start-KoeScope.cmd`
-- 或双击 `E:\DL Manager\Start-KoeScope.cmd`
-
-快捷启动会自动检查 `5178` 端口；如果 KoeScope 尚未运行，会在后台启动 `npm start`，等待 `/api/health` 可用后打开首页。日志写入 `dev-logs/koescope-launch.out.log` 和 `dev-logs/koescope-launch.err.log`。
-
-运行测试：
+如果 npm registry 或原生依赖安装失败，可以显式使用官方 registry：
 
 ```bash
-npm test
+npm install --registry=https://registry.npmjs.org
 ```
 
-## 界面导览
+## Chrome Companion
 
-首页第一屏就是搜索工作区，不做营销落地页。顶部提供搜索、声优详情和 Monitor 的清爽导航；主工作区负责人物解析、别名选择、年龄范围、详情验证和渐进式 DLsite 搜索。
-
-结果列表按作品类型和年龄分级筛选，封面、排序标签、年龄标记、验证状态、价格、销量和“监测”入口会在同一行内保持高密度展示。搜索会先显示首批结果，再继续在后台加载完整页数。
-
-声优详情页位于 `person.html`。从首页候选人物点击“详情”进入后，可以查看人物主信息、别名摘要、横向统计指标、最近搜索时间线，以及按热门 / 最新切换的本地作品库。
-
-Monitor 与活动中心保持工具型布局：指标带、活动摘要、排行榜、账号状态、点数推荐、提醒、关注作品和明显降价列表都以浅色分区、细分割线和蓝色状态强调呈现。移动端会自动收敛为单列或双列信息带，避免横向溢出。
-
-## 搜索工作流
-
-1. 输入声优名或马甲，例如 `青山ゆかり`。
-2. 点击“解析人物”，从 Bangumi 获取候选人物和别名。
-3. 选择正确人物，勾选要搜索的别名。
-4. 设置年龄范围、排序、每个别名最多页数和每页数量。
-5. 如果范围包含 R18，确认合法年龄与地区后再搜索。
-6. 点击“搜索 DLsite”，应用会创建渐进式搜索任务。
-7. 首批结果先展示，后续页面继续在后台加载，直到当前配置范围完成。
-
-## Monitor
-
-Monitor 使用本地 SQLite 数据库保存数据，默认路径为 `data/dlsite-monitor.sqlite`。
-
-排行榜同步覆盖：
-
-- 楼层：`home`、`maniax`
-- 周期：日榜、周榜、月榜
-- 分类：总榜、ASMR / 音声、游戏、漫画
-
-默认每日自动检查一次排行榜，也可以在 Monitor 中手动点击“同步”。同步会先保存排行榜快照并逐步显示；只有排行榜页缺少关键信息时才请求详情接口补充。默认请求间隔为 1.5 秒，可用 `DLSITE_MONITOR_DELAY_MS` 调整。
-
-价格提醒只对关注作品生成。默认规则是降价至少 20% 或 500 円，或达到用户设置的目标价。已购作品会从自动关注和提醒中排除。
-
-## 活动中心
-
-活动中心位于 `http://localhost:5178/activities.html`，用于集中查看 DLsite 公开活动。
-
-支持过滤：
-
-- 福利类型：全部、点数、优惠券、折扣、免费、福利、专题
-- 状态：进行中、全部、即将结束、未读提醒
-- 搜索：活动标题、摘要、详情摘要和活动链接
-- 只看与我相关：基于本地关注、DLsite 愿望单和收藏做保守匹配
-
-Dashboard 中保留简洁活动摘要和“活动中心”入口。相关作品如果暂时只有 RJ 号，会显示社团名、缩略图、价格、折扣和来源，避免只展示裸编号。
-
-活动同步默认每 6 小时检查一次，可用以下环境变量调整：
-
-- `DLSITE_ACTIVITY_AUTO_SYNC=0`：关闭活动自动同步
-- `DLSITE_ACTIVITY_SYNC_INTERVAL_MS=21600000`：调整活动同步间隔
-
-活动数据来自 DLsite 公开活动 banner JSON，并谨慎解析公开详情页。不会绕过登录、访问私有账号页或声明优惠券归属。
-
-## Chrome 插件
-
-`extension/` 目录提供 Manifest V3 KoeScope Companion。插件主要负责把浏览器中已登录的 DLsite 账号页面导入本地后端，不直接替代后端抓取逻辑。
+`extension/` 目录提供 Manifest V3 扩展。它用于把浏览器中已登录的 DLsite 账号页面内容导入本地后端，不直接替代后端公开页面抓取逻辑。
 
 安装方式：
 
 1. 先运行本地后端：`npm start`
 2. 打开 Chrome 的 `chrome://extensions`
 3. 启用“开发者模式”
-4. 选择“加载已解压的扩展程序”，加载项目中的 `extension/` 目录
-5. 打开插件面板，配置本地后端地址并同步账号
+4. 选择“加载已解压的扩展程序”，加载项目里的 `extension/` 目录
+5. 打开扩展面板，配置本地后端地址并同步账号页面
 
-插件支持：
+## 本地数据与隐私边界
 
-- 检查本地后端连接状态
-- 保存最近搜索词和搜索配置
-- 从网页选中文本快速带入本地搜索
-- 捕获已登录 DLsite 页面并导入点数、愿望单、收藏和已购列表
-- 显示 DLsite 活动未读提醒摘要
-
-## API
-
-基础：
-
-- `GET /api/health`：健康检查
-- `POST /api/persons`：解析 Bangumi 候选人物
-- `POST /api/search/progressive`：创建渐进式 DLsite 搜索任务
-- `GET /api/search/progressive/:id`：读取搜索任务进度和当前结果
-
-Monitor：
-
-- `POST /api/sync/dlsite-rankings`：启动排行榜同步
-- `GET /api/sync/status`：读取排行榜同步状态
-- `GET /api/dashboard/summary`：读取仪表盘 KPI、提醒和明显降价作品
-- `GET /api/rankings?floor=home|maniax&period=day|week|month&category=all|voice|game|manga`：读取排行榜快照
-- `GET /api/works/:id/history`：读取单个作品的价格和排名历史
-- `GET /api/watchlist` / `POST /api/watchlist` / `DELETE /api/watchlist/:id`：管理关注作品
-- `GET /api/alerts?status=unread|all` / `POST /api/alerts/:id/read`：读取价格提醒并标记已读
-
-账号：
-
-- `GET /api/account/dlsite`：读取本地账号摘要
-- `GET /api/account/dlsite/sync-state`：读取账号列表同步状态
-- `POST /api/account/dlsite/import-pages`：导入插件捕获的账号页面
-- `DELETE /api/account/dlsite/session`：清除本地账号会话缓存
-- `GET /api/recommendations/affordable?limit=8`：基于点数读取可负担作品推荐
-
-活动：
-
-- `POST /api/sync/dlsite-activities`：启动 DLsite 公开活动同步
-- `GET /api/activities/status`：读取活动同步状态
-- `GET /api/activities?status=active|all|endingSoon|unread&benefit=all|point|coupon|discount|free|bonus|info&search=...&related=1`：读取活动列表
-- `GET /api/activity-alerts/summary?limit=3`：读取活动未读提醒摘要
-- `POST /api/activity-alerts/:id/read`：标记活动提醒已读
+- SQLite 数据库默认保存在 `data/dlsite-monitor.sqlite`。
+- 静态缓存默认保存在 `public/cache/`。
+- 账号、愿望单、收藏、已购和本地注释只保存在本机。
+- 项目只读取公开页面和用户主动导入的本地账号页面缓存。
+- 不提供下载、购买、绕过访问限制或绕过年龄确认的能力。
+- 活动匹配只表示“可能相关”，不声明用户已经拥有优惠券、领取资格或最终折扣。
 
 ## 环境变量
 
 - `PORT`：本地服务端口，默认 `5178`
 - `DLSITE_MONITOR_DB`：SQLite 数据库路径
 - `DLSITE_MONITOR_AUTO_SYNC=0`：关闭排行榜自动同步
-- `DLSITE_MONITOR_DELAY_MS`：排行榜请求间隔，默认 1500ms
+- `DLSITE_MONITOR_DELAY_MS`：排行榜请求间隔，默认 `1500`
 - `DLSITE_ACTIVITY_AUTO_SYNC=0`：关闭活动自动同步
 - `DLSITE_ACTIVITY_SYNC_INTERVAL_MS`：活动自动同步间隔
+- `DLSITE_PERSON_SUBSCRIPTION_AUTO_SYNC=0`：关闭人物订阅自动同步
 
-## 边界
+PowerShell 临时换端口示例：
 
-- 本项目只读取公开页面和用户主动导入的本地账号页面缓存。
-- 不提供下载、购买、绕过访问限制或绕过年龄确认的能力。
-- 活动匹配只表示“可能相关”，不声明用户已拥有优惠券、资格或最终折扣。
+```powershell
+$env:PORT=5180; npm start
+```
+
+## API 摘要
+
+基础：
+
+- `GET /api/health`
+- `POST /api/persons`
+- `POST /api/search/progressive`
+- `GET /api/search/progressive/:id`
+
+Monitor：
+
+- `POST /api/sync/dlsite-rankings`
+- `GET /api/sync/status`
+- `GET /api/dashboard/summary`
+- `GET /api/rankings`
+- `GET /api/works/:id/history`
+- `GET /api/watchlist`
+- `POST /api/watchlist`
+- `DELETE /api/watchlist/:id`
+
+账号与活动：
+
+- `GET /api/account/dlsite`
+- `POST /api/account/dlsite/import-pages`
+- `GET /api/recommendations/affordable`
+- `POST /api/sync/dlsite-activities`
+- `GET /api/activities`
+- `GET /api/activity-alerts/summary`
+- `POST /api/activity-alerts/:id/read`
+
+## 分享文案
+
+KoeScope 是一个本地优先的 DLsite / Bangumi 声优作品检索与监控工具：输入声优名或马甲即可解析别名、渐进式搜索公开作品，还能在本地监控排行榜、价格、关注作品和活动提醒。安装依赖后运行 `npm start` 就能在浏览器里打开。

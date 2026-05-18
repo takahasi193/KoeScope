@@ -5,6 +5,7 @@
   "description": "Local Bangumi voice actor work search and DLsite monitor helper.",
   "type": "module",
   "scripts": {
+    "prestart": "node scripts/ensure-web-build.mjs",
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test && npm run web:test",
