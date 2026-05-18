@@ -1,27 +1,13 @@
 import { normalizeSpace } from "./cache.js";
 import { isPublicSearchQueryKey } from "./publicSearchCacheReadApi.js";
+import { PUBLIC_SEARCH_QUERY_FIELDS } from "./searchCacheKey.js";
+import { toIsoTime, toTimeMs } from "./time.js";
 
 const DEFAULT_MAX_BATCH = 5;
 const DEFAULT_STALE_AFTER_MS = 1000 * 60 * 60 * 24 * 7;
 const DEFAULT_RETRY_BASE_MS = 1000 * 60 * 5;
 const DEFAULT_RETRY_MAX_MS = 1000 * 60 * 60;
 const DEFAULT_MAX_ATTEMPTS = 4;
-const PUBLIC_QUERY_FIELDS = ["version", "keyword", "personId", "aliases", "scope", "order"];
-
-function toIsoTime(value, fallback = "") {
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === "number" && Number.isFinite(value)) return new Date(value).toISOString();
-  if (typeof value === "string" && value) {
-    const parsed = Date.parse(value);
-    if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
-  }
-  return fallback;
-}
-
-function toTimeMs(value) {
-  const iso = toIsoTime(value);
-  return iso ? Date.parse(iso) : NaN;
-}
 
 function positiveInteger(value, fallback) {
   const number = Math.trunc(Number(value));
@@ -31,7 +17,7 @@ function positiveInteger(value, fallback) {
 function publicQueryFields(source = {}) {
   const publicQuery = source.publicQuery ?? source.cache?.publicQuery ?? {};
   const result = {};
-  for (const field of PUBLIC_QUERY_FIELDS) {
+  for (const field of PUBLIC_SEARCH_QUERY_FIELDS) {
     if (publicQuery[field] !== undefined) result[field] = publicQuery[field];
   }
   return result;

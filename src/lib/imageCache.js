@@ -3,6 +3,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { normalizeRemoteImageUrl, publicImagePathSegment } from "./publicImageAsset.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,40 +13,9 @@ const DEFAULT_IMAGE_CACHE_RETENTION_DAYS = 30;
 const DEFAULT_IMAGE_CACHE_MAX_BYTES = 512 * 1024 * 1024;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function normalizeRemoteImageUrl(value) {
-  const text = String(value ?? "").trim();
-  if (!text) return "";
-  try {
-    const url = new URL(text);
-    if (!["http:", "https:"].includes(url.protocol)) return "";
-    url.hash = "";
-    return url.href;
-  } catch {
-    return "";
-  }
-}
-
-function cacheTypeDir(type) {
-  if (type === "activity") return "activities";
-  if (type === "work") return "works";
-  return "images";
-}
-
-function extensionFromUrl(urlValue) {
-  try {
-    const ext = path.extname(new URL(urlValue).pathname).toLowerCase();
-    if (!IMAGE_EXTENSIONS.has(ext)) return ".jpg";
-    return ext === ".jpeg" ? ".jpg" : ext;
-  } catch {
-    return ".jpg";
-  }
-}
-
 export function publicCachePathForUrl(remoteUrl, { type = "work" } = {}) {
-  const normalized = normalizeRemoteImageUrl(remoteUrl);
-  if (!normalized) return "";
-  const hash = crypto.createHash("sha256").update(normalized).digest("hex").slice(0, 24);
-  return `/cache/${cacheTypeDir(type)}/${hash}${extensionFromUrl(normalized)}`;
+  const segment = publicImagePathSegment(remoteUrl, { type });
+  return segment ? `/cache/${segment}` : "";
 }
 
 function filePathForPublicUrl(publicRoot, publicUrl) {

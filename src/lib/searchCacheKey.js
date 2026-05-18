@@ -3,6 +3,7 @@ import { normalizeSpace } from "./cache.js";
 import { normalizeSearchOrder } from "./dlsite.js";
 
 export const SEARCH_CACHE_QUERY_VERSION = "dlsite-search-v1";
+export const PUBLIC_SEARCH_QUERY_FIELDS = ["version", "keyword", "personId", "aliases", "scope", "order"];
 
 const SEARCH_SCOPES = new Set(["all", "adult", "nonAdult"]);
 

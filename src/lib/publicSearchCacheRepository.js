@@ -3,20 +3,11 @@ import { openMonitorDatabase } from "./monitor/db/connection.js";
 import { asJson, parseJson } from "./monitor/db/utils.js";
 import { buildPublicSearchCachePayload } from "./publicSearchCachePayload.js";
 import { withSearchCacheRuntimeState } from "./searchCacheKey.js";
+import { toIsoTime } from "./time.js";
 
 const DEFAULT_PUBLIC_SEARCH_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 
 export { buildPublicSearchCachePayload } from "./publicSearchCachePayload.js";
-
-function toIsoTime(value) {
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === "number" && Number.isFinite(value)) return new Date(value).toISOString();
-  if (typeof value === "string" && value) {
-    const parsed = Date.parse(value);
-    if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
-  }
-  return new Date().toISOString();
-}
 
 function toExpiresAt(cachedAt, ttlMs) {
   const ttl = Number(ttlMs);

@@ -1,6 +1,7 @@
 import { openMonitorDatabase } from "./monitor/db/connection.js";
 import { asJson, mapJoinedWorkAnnotation, mapPersonSubscription, parseJson } from "./monitor/db/utils.js";
 import { normalizeSpace } from "./cache.js";
+import { toIsoTime } from "./time.js";
 
 const DEFAULT_HISTORY_LIMIT = 20;
 const MAX_HISTORY_LIMIT = 100;
@@ -38,16 +39,6 @@ function clampWorkLimit(value) {
 function toNullableInteger(value) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.trunc(number) : null;
-}
-
-function toIsoTime(value) {
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === "number" && Number.isFinite(value)) return new Date(value).toISOString();
-  if (typeof value === "string" && value) {
-    const parsed = Date.parse(value);
-    if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
-  }
-  return new Date().toISOString();
 }
 
 function normalizeCleanupDate(value) {

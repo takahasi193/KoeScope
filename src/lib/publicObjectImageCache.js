@@ -1,21 +1,6 @@
-import crypto from "node:crypto";
-import path from "node:path";
+import { normalizeRemoteImageUrl, publicImagePathSegment } from "./publicImageAsset.js";
 
 const DEFAULT_OBJECT_IMAGE_PREFIX = "koescope/public-images";
-const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"]);
-
-function normalizeRemoteImageUrl(value) {
-  const text = String(value ?? "").trim();
-  if (!text) return "";
-  try {
-    const url = new URL(text);
-    if (!["http:", "https:"].includes(url.protocol)) return "";
-    url.hash = "";
-    return url.href;
-  } catch {
-    return "";
-  }
-}
 
 function normalizePublicBaseUrl(value) {
   const text = String(value ?? "").trim();
@@ -40,27 +25,10 @@ function normalizeObjectPrefix(value) {
     .join("/");
 }
 
-function cacheTypeDir(type) {
-  if (type === "activity") return "activities";
-  if (type === "work") return "works";
-  return "images";
-}
-
-function extensionFromUrl(urlValue) {
-  try {
-    const ext = path.extname(new URL(urlValue).pathname).toLowerCase();
-    if (!IMAGE_EXTENSIONS.has(ext)) return ".jpg";
-    return ext === ".jpeg" ? ".jpg" : ext;
-  } catch {
-    return ".jpg";
-  }
-}
-
 export function publicObjectImageKey(remoteUrl, { type = "work", prefix = DEFAULT_OBJECT_IMAGE_PREFIX } = {}) {
   const normalized = normalizeRemoteImageUrl(remoteUrl);
   if (!normalized) return "";
-  const hash = crypto.createHash("sha256").update(normalized).digest("hex").slice(0, 24);
-  return `${normalizeObjectPrefix(prefix)}/${cacheTypeDir(type)}/${hash}${extensionFromUrl(normalized)}`;
+  return `${normalizeObjectPrefix(prefix)}/${publicImagePathSegment(normalized, { type })}`;
 }
 
 export function resolvePublicObjectImage(remoteUrl, options = {}) {

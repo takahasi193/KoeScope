@@ -1,4 +1,5 @@
 import { normalizeSpace } from "./cache.js";
+import { PUBLIC_SEARCH_QUERY_FIELDS } from "./searchCacheKey.js";
 
 const PUBLIC_PERSON_FIELDS = [
   "id",
@@ -30,7 +31,6 @@ const PUBLIC_PROGRESS_FIELDS = [
   "totalPageBudget",
   "updatedAt",
 ];
-const PUBLIC_QUERY_FIELDS = ["version", "keyword", "personId", "aliases", "scope", "order"];
 const PUBLIC_CACHE_READ_FIELDS = ["source", "isStale", "cachedAt"];
 const PUBLIC_CACHE_REFRESH_FIELDS = ["status", "isRefreshing", "updatedAt"];
 const PUBLIC_ITEM_FIELDS = [
@@ -80,7 +80,7 @@ function publicCacheMetadata(cache = {}) {
   const result = {
     queryKey: normalizeSpace(cache.queryKey),
     queryVersion: normalizeSpace(cache.queryVersion),
-    publicQuery: pickFields(cache.publicQuery ?? {}, PUBLIC_QUERY_FIELDS),
+    publicQuery: pickFields(cache.publicQuery ?? {}, PUBLIC_SEARCH_QUERY_FIELDS),
   };
   if (cache.read) result.read = pickFields(cache.read, PUBLIC_CACHE_READ_FIELDS);
   if (cache.refresh) result.refresh = pickFields(cache.refresh, PUBLIC_CACHE_REFRESH_FIELDS);
