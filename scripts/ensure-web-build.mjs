@@ -10,9 +10,9 @@ if (existsSync(outputIndex)) {
 
 console.log('web/out is missing; building the KoeScope static UI before start...');
 
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const result = spawnSync(npmCommand, ['run', 'web:build'], {
+const result = spawnSync('npm', ['run', 'web:build'], {
   cwd: process.cwd(),
+  shell: process.platform === 'win32',
   stdio: 'inherit',
 });
 
