@@ -81,3 +81,7 @@ Completed baseline:
 ## Phase 11: Cache-First Local Overlay Hardening
 
 - [x] Cache-first private overlay: apply local watchlist, annotations, account lists, and subscription context after public cache reads, without writing private fields into stored or cloud payloads. Done 2026-05-18 on branch `optimize/cache-first-local-overlay`; `preferCache` responses now restore local context before returning to the local UI.
+
+## Phase 12: Person Profile Source Enrichment
+
+- [x] Moegirl person profile enrichment: add detail-page-only 萌娘百科 lookup for voice actor summaries and representative roles/works, with no SQLite persistence or public cache writes. Done 2026-06-03 on branch `feature/moegirl-person-profile`; profile API degrades on remote failure and both Next/static fallback person pages render the compact source panel.

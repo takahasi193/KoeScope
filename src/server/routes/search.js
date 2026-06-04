@@ -210,7 +210,35 @@ function cachePayloadWithBackgroundRefresh(cachedPayload, refreshPayload, monito
   };
 }
 
-export function registerSearchRoutes(app, { monitor, searchHistory, searchJobStore, searchCache = null }) {
+function unavailableMoegirlProfile(error = null) {
+  return {
+    status: error ? "unavailable" : "not_found",
+    sourceName: "萌娘百科",
+    title: "",
+    sourceUrl: "",
+    summary: "",
+    representativeText: "",
+    notableWorks: [],
+    matchedBy: "",
+    fetchedAt: new Date().toISOString(),
+    ...(error ? { error: error.message || "萌娘百科资料暂时无法读取。" } : {}),
+  };
+}
+
+async function enrichPersonProfileWithMoegirl(profile, moegirl) {
+  if (!moegirl?.findPersonProfile) return { ...profile, moegirl: unavailableMoegirlProfile() };
+  try {
+    const moegirlProfile = await moegirl.findPersonProfile({
+      person: profile.person,
+      aliases: profile.aliases,
+    });
+    return { ...profile, moegirl: moegirlProfile };
+  } catch (error) {
+    return { ...profile, moegirl: unavailableMoegirlProfile(error) };
+  }
+}
+
+export function registerSearchRoutes(app, { monitor, searchHistory, searchJobStore, searchCache = null, moegirl = null }) {
   app.post(
     "/api/persons",
     asyncHandler(async (req, res) => {
@@ -329,7 +357,7 @@ export function registerSearchRoutes(app, { monitor, searchHistory, searchJobSto
         recentLimit: readSearchHistoryLimit(req.query.limit),
       });
       if (!payload) return res.status(404).json({ error: "本地搜索历史中还没有这个人物。" });
-      res.json(payload);
+      res.json(await enrichPersonProfileWithMoegirl(payload, moegirl));
     })
   );
 

@@ -18,6 +18,10 @@ const els = {
   personMeta: document.querySelector("#personMeta"),
   dataSource: document.querySelector("#dataSource"),
   aliasSummary: document.querySelector("#aliasSummary"),
+  moegirlStatus: document.querySelector("#moegirlStatus"),
+  moegirlSummary: document.querySelector("#moegirlSummary"),
+  moegirlWorks: document.querySelector("#moegirlWorks"),
+  moegirlSource: document.querySelector("#moegirlSource"),
   keywordInput: document.querySelector("#keywordInput"),
   keywordButton: document.querySelector("#keywordButton"),
   aliasCount: document.querySelector("#aliasCount"),
@@ -126,7 +130,49 @@ function renderEmpty(message) {
   els.workSummary.textContent = message;
   els.workList.innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
   state.subscription = null;
+  renderMoegirl(null);
   renderSubscription();
+}
+
+function renderMoegirl(moegirl) {
+  const profile = moegirl ?? {};
+  const status = profile.status || "not_found";
+  const found = status === "found";
+  const unavailable = status === "unavailable";
+  els.moegirlStatus.textContent = found
+    ? "萌娘百科资料"
+    : unavailable
+      ? "萌娘百科资料暂时无法读取"
+      : "萌娘百科资料暂未匹配";
+  els.moegirlSummary.textContent = found
+    ? profile.summary || "萌娘百科条目暂未提供稳定简介。"
+    : unavailable
+      ? profile.error || "暂时无法读取萌娘百科公开页面，作品库仍可正常使用。"
+      : "当前人物还没有匹配到可展示的萌娘百科资料。";
+
+  if (found && profile.sourceUrl) {
+    els.moegirlSource.href = profile.sourceUrl;
+    els.moegirlSource.textContent = profile.title ? `来源：${profile.title}` : "来源：萌娘百科";
+    els.moegirlSource.hidden = false;
+  } else {
+    els.moegirlSource.hidden = true;
+  }
+
+  const works = Array.isArray(profile.notableWorks) ? profile.notableWorks : [];
+  els.moegirlWorks.innerHTML = works.length
+    ? works
+        .map(
+          (work) => `
+            <span class="moegirl-work-chip">
+              <strong>${escapeHtml(work.title || "代表作品")}</strong>
+              ${work.role ? `<span>${escapeHtml(work.role)}</span>` : ""}
+            </span>
+          `
+        )
+        .join("")
+    : found && profile.representativeText
+      ? `<span class="moegirl-work-chip"><strong>代表角色</strong><span>${escapeHtml(profile.representativeText)}</span></span>`
+      : "";
 }
 
 function renderAliases() {
@@ -224,6 +270,7 @@ function renderProfile() {
   renderAliases();
   renderStats();
   renderRecentSearches();
+  renderMoegirl(profile.moegirl);
   renderSubscription();
 }
 

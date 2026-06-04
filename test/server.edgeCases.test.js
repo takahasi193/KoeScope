@@ -442,3 +442,55 @@ test("server exposes person profile and persisted works routes", async () => {
     assert.equal(missingWorks.status, 404);
   });
 });
+
+test("server enriches person profile with Moegirl data", async () => {
+  const app = createApp({
+    monitor: createMockMonitor(),
+    searchHistory: createMockSearchHistory(),
+    moegirl: {
+      findPersonProfile: async ({ person, aliases }) => ({
+        status: "found",
+        sourceName: "萌娘百科",
+        title: "青山由香里",
+        sourceUrl: "https://zh.moegirl.org.cn/青山由香里",
+        summary: `${person.name} 是日本的女性声优。`,
+        representativeText: "风见一姬《灰色系列》",
+        notableWorks: [{ title: "灰色系列", role: aliases[0].value }],
+        matchedBy: "search",
+        fetchedAt: "2026-06-03T00:00:00.000Z",
+      }),
+    },
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/persons/123/profile`);
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.moegirl.status, "found");
+    assert.equal(payload.moegirl.sourceName, "萌娘百科");
+    assert.equal(payload.moegirl.notableWorks[0].title, "灰色系列");
+  });
+});
+
+test("server keeps person profile available when Moegirl lookup fails", async () => {
+  const app = createApp({
+    monitor: createMockMonitor(),
+    searchHistory: createMockSearchHistory(),
+    moegirl: {
+      findPersonProfile: async () => {
+        throw new Error("remote unavailable");
+      },
+    },
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/persons/123/profile`);
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.person.id, 123);
+    assert.equal(payload.moegirl.status, "unavailable");
+    assert.match(payload.moegirl.error, /remote unavailable/);
+  });
+});

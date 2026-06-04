@@ -31,6 +31,7 @@ Windows 用户也可以双击项目根目录的 `Start-KoeScope.cmd`，或双击
 - 本地优先缓存：公开搜索缓存与本地关注、注释、账号导入状态叠加展示，不把个人状态写回公开数据。
 - 年龄与作品类型筛选：支持全年龄、R18、混合范围和作品形态分类。
 - 声优详情页：汇总人物资料、别名、本地搜索记录、热门作品和最新作品。
+- 萌娘百科资料补充：人物详情页会按 Bangumi 人物名和马甲尝试读取公开条目，展示简介、来源链接和代表角色 / 作品；远端失败时不影响本地作品库。
 - Monitor 仪表盘：查看排行榜快照、价格变化、关注作品、提醒和点数推荐。
 - 活动中心：浏览 DLsite 公开活动，并按福利类型、状态、关键词和“与我相关”过滤。
 - Chrome companion：可从已登录的 DLsite 页面导入点数、愿望单、收藏和已购作品到本地。
@@ -86,6 +87,7 @@ npm install --registry=https://registry.npmjs.org
 - 静态缓存默认保存在 `public/cache/`。
 - 账号、愿望单、收藏、已购和本地注释只保存在本机。
 - 项目只读取公开页面和用户主动导入的本地账号页面缓存。
+- 萌娘百科资料补充仅读取公开条目并使用短期内存缓存，不写入 SQLite、搜索历史或公开搜索缓存。
 - 不提供下载、购买、绕过访问限制或绕过年龄确认的能力。
 - 活动匹配只表示“可能相关”，不声明用户已经拥有优惠券、领取资格或最终折扣。
 
@@ -111,6 +113,8 @@ $env:PORT=5180; npm start
 
 - `GET /api/health`
 - `POST /api/persons`
+- `GET /api/persons/:id/profile`
+- `GET /api/persons/:id/works`
 - `POST /api/search/progressive`
 - `GET /api/search/progressive/:id`
 

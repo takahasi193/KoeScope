@@ -59,6 +59,10 @@ function createPersonHarness() {
     "personMeta",
     "dataSource",
     "aliasSummary",
+    "moegirlStatus",
+    "moegirlSummary",
+    "moegirlWorks",
+    "moegirlSource",
     "keywordInput",
     "keywordButton",
     "aliasCount",
@@ -132,6 +136,17 @@ function createPersonHarness() {
       lastCheckedAt: "2026-05-10T03:00:00.000Z",
       lastError: "",
       lastNewItemCount: 1,
+    },
+    moegirl: {
+      status: "found",
+      sourceName: "萌娘百科",
+      title: "青山由香里",
+      sourceUrl: "https://zh.moegirl.org.cn/青山由香里",
+      summary: "青山由香里是日本的女性声优，主要从事成人游戏的配音工作。",
+      representativeText: "风见一姬《灰色系列》",
+      notableWorks: [{ title: "灰色系列", role: "风见一姬" }],
+      matchedBy: "search",
+      fetchedAt: "2026-06-03T00:00:00.000Z",
     },
     dataSource: { kind: "local_search_history" },
   };
@@ -257,6 +272,10 @@ test("person detail page renders persisted profile and switches work sources", a
   await waitFor(() => context.window.__personDetail.state.works);
 
   assert.equal(elements.get("#personName").textContent, "Aoyama Yukari");
+  assert.equal(elements.get("#moegirlStatus").textContent, "萌娘百科资料");
+  assert.match(elements.get("#moegirlSummary").textContent, /日本的女性声优/);
+  assert.match(elements.get("#moegirlWorks").innerHTML, /灰色系列/);
+  assert.match(elements.get("#moegirlWorks").innerHTML, /风见一姬/);
   assert.match(elements.get("#statsGrid").innerHTML, /总作品/);
   assert.match(elements.get("#aliasList").innerHTML, /马甲/);
   assert.match(elements.get("#workList").innerHTML, /Rain ASMR/);

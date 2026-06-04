@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDlsiteMonitor } from "./lib/monitor/service.js";
+import { createMoegirlProfileService } from "./lib/moegirl.js";
 import { createPublicSearchCacheRepository } from "./lib/publicSearchCacheRepository.js";
 import { createSearchHistoryRepository } from "./lib/searchHistoryRepository.js";
 import { createSearchJobStore } from "./lib/searchJobs.js";
@@ -70,7 +71,13 @@ function mountFrontend(app) {
   app.use(express.static(PUBLIC_ROOT));
 }
 
-export function createApp({ monitor = null, searchHistory = null, searchJobStore = null, searchCache = null } = {}) {
+export function createApp({
+  monitor = null,
+  searchHistory = null,
+  searchJobStore = null,
+  searchCache = null,
+  moegirl = null,
+} = {}) {
   const resolvedSearchHistory = searchHistory ?? createSearchHistoryRepository();
   const resolvedSearchCache =
     searchCache ?? (resolvedSearchHistory?.db ? createPublicSearchCacheRepository({ db: resolvedSearchHistory.db }) : null);
@@ -96,6 +103,7 @@ export function createApp({ monitor = null, searchHistory = null, searchJobStore
     searchHistory: resolvedSearchHistory,
     searchJobStore: resolvedSearchJobStore,
     searchCache: resolvedSearchCache,
+    moegirl,
   });
   registerMonitorRoutes(app, { monitor: resolvedMonitor });
   registerActivityRoutes(app, { monitor: resolvedMonitor });
@@ -109,7 +117,7 @@ export function createApp({ monitor = null, searchHistory = null, searchJobStore
 export function startServer({ port = Number(process.env.PORT) || 5178 } = {}) {
   const searchHistory = createSearchHistoryRepository();
   const monitor = createDlsiteMonitor({ searchHistoryRepository: searchHistory });
-  const app = createApp({ monitor, searchHistory });
+  const app = createApp({ monitor, searchHistory, moegirl: createMoegirlProfileService() });
   monitor.startDailyScheduler();
   return app.listen(port, () => {
     console.log(`KoeScope is running at http://localhost:${port}`);

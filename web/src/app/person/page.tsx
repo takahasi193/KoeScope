@@ -66,6 +66,55 @@ function WorkCard({ item, onWatch }: { item: WorkItem; onWatch: (item: WorkItem)
   );
 }
 
+function MoegirlProfileBox({ moegirl }: { moegirl: Record<string, any> | null | undefined }) {
+  const status = compactText(moegirl?.status, "not_found");
+  const found = status === "found";
+  const unavailable = status === "unavailable";
+  const notableWorks = arrayOf<Record<string, any>>(moegirl?.notableWorks);
+  const statusText = found
+    ? "萌娘百科资料"
+    : unavailable
+      ? "萌娘百科资料暂时无法读取"
+      : "萌娘百科资料暂未匹配";
+  const summary = found
+    ? compactText(moegirl?.summary, "萌娘百科条目暂未提供稳定简介。")
+    : unavailable
+      ? compactText(moegirl?.error, "暂时无法读取萌娘百科公开页面，作品库仍可正常使用。")
+      : "当前人物还没有匹配到可展示的萌娘百科资料。";
+
+  return (
+    <section className="person-moegirl-box" aria-labelledby="moegirlStatus">
+      <div className="person-moegirl-head">
+        <p className="eyebrow">Moegirl 05 / Profile</p>
+        <strong id="moegirlStatus">{statusText}</strong>
+        {found && moegirl?.sourceUrl ? (
+          <a className="mini-link" href={moegirl.sourceUrl} target="_blank" rel="noreferrer">
+            来源：{compactText(moegirl.title, "萌娘百科")}
+          </a>
+        ) : null}
+      </div>
+      <p>{summary}</p>
+      <div className="moegirl-work-list">
+        {notableWorks.length
+          ? notableWorks.map((work) => (
+              <span className="moegirl-work-chip" key={`${compactText(work.title)}:${compactText(work.role)}`}>
+                <strong>{compactText(work.title, "代表作品")}</strong>
+                {work.role ? <span>{compactText(work.role)}</span> : null}
+              </span>
+            ))
+          : found && moegirl?.representativeText
+            ? (
+                <span className="moegirl-work-chip">
+                  <strong>代表角色</strong>
+                  <span>{compactText(moegirl.representativeText)}</span>
+                </span>
+              )
+            : null}
+      </div>
+    </section>
+  );
+}
+
 export default function PersonPage() {
   const [serverStatus, setServerStatus] = useState("连接中");
   const [keyword, setKeyword] = useState("");
@@ -253,6 +302,7 @@ export default function PersonPage() {
               {subscription ? <button className="mini-button" type="button" onClick={deleteSubscription}>取消关注</button> : null}
             </div>
           </div>
+          <MoegirlProfileBox moegirl={profile?.moegirl} />
         </section>
 
         <section className="layout">
