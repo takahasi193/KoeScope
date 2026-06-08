@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Chip, Link } from "@heroui/react";
 import { ThemeToggle } from "@/components/ThemeProvider";
+import { mobileNavItems, resolveMobileNavKey } from "@/lib/mobileNav";
 
 type TemplateKey = "search" | "monitor";
 
@@ -60,22 +61,46 @@ function TemplateSwitcher({ initial }: { initial: TemplateKey }) {
   );
 }
 
+function MobileBottomNav() {
+  const pathname = usePathname();
+  const active = resolveMobileNavKey(pathname || "/");
+
+  return (
+    <nav className="mobile-bottom-nav" aria-label="移动主导航">
+      {mobileNavItems.map((item) => (
+        <a
+          className={`mobile-nav-item ${active === item.key ? "is-active" : ""}`}
+          href={item.href}
+          aria-current={active === item.key ? "page" : undefined}
+          key={item.key}
+        >
+          <span className="mobile-nav-dot" aria-hidden="true" />
+          <span>{item.label}</span>
+        </a>
+      ))}
+    </nav>
+  );
+}
+
 export function SearchTopNav({ status = "连接中" }: { status?: string }) {
   return (
-    <header className="topbar">
-      <div>
-        <p className="eyebrow">KoeScope</p>
-        <h1>人物作品搜索</h1>
-      </div>
-      <nav className="top-actions" aria-label="页面操作">
-        <Link className="top-link ks-nav-link" href="/person.html">
-          人物详情
-        </Link>
-        <TemplateSwitcher initial="search" />
-        <ThemeToggle />
-        <Chip className="status-pill ks-status-chip">{status}</Chip>
-      </nav>
-    </header>
+    <>
+      <header className="topbar">
+        <div>
+          <p className="eyebrow">KoeScope</p>
+          <h1>人物作品搜索</h1>
+        </div>
+        <nav className="top-actions" aria-label="页面操作">
+          <Link className="top-link ks-nav-link" href="/person.html">
+            人物详情
+          </Link>
+          <TemplateSwitcher initial="search" />
+          <ThemeToggle />
+          <Chip className="status-pill ks-status-chip">{status}</Chip>
+        </nav>
+      </header>
+      <MobileBottomNav />
+    </>
   );
 }
 
@@ -89,16 +114,19 @@ export function MonitorTopNav({
   children?: React.ReactNode;
 }) {
   return (
-    <header className="monitor-topbar">
-      <div>
-        <p className="eyebrow">{eyebrow}</p>
-        <h1>{title}</h1>
-      </div>
-      <nav className="top-actions" aria-label="页面操作">
-        {children}
-        <TemplateSwitcher initial="monitor" />
-        <ThemeToggle />
-      </nav>
-    </header>
+    <>
+      <header className="monitor-topbar">
+        <div>
+          <p className="eyebrow">{eyebrow}</p>
+          <h1>{title}</h1>
+        </div>
+        <nav className="top-actions" aria-label="页面操作">
+          {children}
+          <TemplateSwitcher initial="monitor" />
+          <ThemeToggle />
+        </nav>
+      </header>
+      <MobileBottomNav />
+    </>
   );
 }

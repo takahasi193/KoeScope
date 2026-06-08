@@ -24,6 +24,18 @@ npm start
 
 Windows 用户也可以双击项目根目录的 `Start-KoeScope.cmd`，或双击 `E:\DL Manager\Start-KoeScope.cmd`。启动器会检查 5178 端口和 `/api/health`，必要时在后台启动 `npm start`。
 
+## Android 访问
+
+移动端第一版是 Android 浏览器适配，不需要安装原生 App。先在 PC 上启动 KoeScope，再让 Android 手机和 PC 连接到同一个局域网，使用浏览器打开：
+
+```text
+http://<PC局域网IP>:5178
+```
+
+例如 PC 的局域网地址是 `192.168.1.23` 时，手机访问 `http://192.168.1.23:5178`。如果无法打开，请确认 Windows 防火墙允许当前 Node.js 服务接收局域网连接，并确认 `PORT` 仍是 `5178`。
+
+Android 端可以查看搜索、人物详情、Monitor 和活动中心。DLsite 账号点数、愿望单、收藏和已购数据仍需要先在 PC Chrome 中通过 KoeScope Companion 扩展同步；手机端只展示已经保存在本机后端里的账号快照，不提供移动端账号导入。
+
 ## 功能亮点
 
 - 声优 / 马甲解析：通过 Bangumi API 获取候选人物、头像、infobox 和别名。
